@@ -1,0 +1,88 @@
+{
+  "nodes": {
+    "root": {
+      "paintable": true,
+      "generate": true,
+      "color": [0, 0, 0],
+      "children": { "forest": 5, "water": 8, "plains": 1 },
+      "adjacencies": {
+        "U": ["root"],
+        "D": ["root"],
+        "L": ["root"],
+        "R": ["root"]
+      }
+    },
+    "forest": {
+      "paintable": true,
+      "generate": true,
+      "color": [100, 230, 100],
+      "children": { "grass": 1, "tree": 1 },
+      "adjacencies": {
+        "U": ["forest"],
+        "D": ["forest"],
+        "L": ["forest"],
+        "R": ["forest"]
+      }
+    },
+    "plains": {
+      "paintable": true,
+      "generate": true,
+      "color": [150, 120, 150],
+      "children": { "grass": 1, "sand": 1 },
+      "adjacencies": {
+        "U": ["plains"],
+        "D": ["plains"],
+        "L": ["plains"],
+        "R": ["plains"]
+      }
+    },
+    "grass": {
+      "paintable": true,
+      "generate": true,
+      "color": [50, 130, 50],
+      "children": {},
+      "adjacencies": {
+        "U": ["grass", "sand", "tree"],
+        "D": ["grass", "sand", "tree"],
+        "L": ["grass", "sand", "tree"],
+        "R": ["grass", "sand", "tree"]
+      }
+    },
+    "sand": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 120, 50],
+      "children": {},
+      "adjacencies": {
+        "U": ["sand", "water", "grass"],
+        "D": ["sand", "water", "grass"],
+        "L": ["sand", "water", "grass"],
+        "R": ["sand", "water", "grass"]
+      }
+    },
+    "water": {
+      "paintable": true,
+      "generate": true,
+      "color": [70, 70, 255],
+      "children": {},
+      "adjacencies": {
+        "U": ["water", "sand"],
+        "D": ["water", "sand"],
+        "L": ["water", "sand"],
+        "R": ["water", "sand"]
+      }
+    },
+    "tree": {
+      "paintable": true,
+      "generate": true,
+      "color": [30, 100, 30],
+      "children": {},
+      "adjacencies": {
+        "U": ["grass"],
+        "D": ["grass"],
+        "L": ["grass"],
+        "R": ["grass"]
+      }
+    }
+  }
+}

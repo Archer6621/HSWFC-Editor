@@ -296,18 +296,29 @@ export class GridState {
       }
     }
     console.log(this.LM);
-    // Init grids
-    this.choices = ones(gridSize, gridSize, this.gridChoices);
-    this.chosen = dotMultiply(ones(gridSize, gridSize), this.root.index);
+
+    this.initialize();
+  }
+
+  initialize() {
+    this.choices = ones(this.gridSize, this.gridSize, this.gridChoices);
+    this.chosen = dotMultiply(
+      ones(this.gridSize, this.gridSize),
+      this.root.index
+    );
     this.image = dotMultiply(
-      ones(gridSize, gridSize, 4),
+      ones(this.gridSize, this.gridSize, 4),
       this.colorMap[this.root.index]
     );
     this.entropyImage = dotMultiply(
-      ones(gridSize, gridSize, 4),
+      ones(this.gridSize, this.gridSize, 4),
       this.entropyColors[this.gridChoices - 1]
     );
-    this.entropy = dotMultiply(ones(gridSize, gridSize), this.gridChoices);
+    this.entropy = dotMultiply(
+      ones(this.gridSize, this.gridSize),
+      this.gridChoices
+    );
+    this.clearQueue();
   }
 
   // Entropy Metrics

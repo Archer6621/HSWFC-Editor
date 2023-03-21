@@ -1,5 +1,5 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
+  <q-layout view="LHh Lpr lFf">
     <q-header elevated>
       <q-toolbar>
         <q-btn
@@ -18,15 +18,20 @@
     </q-header>
 
     <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
-      <q-list>
-        <q-item-label header> Essential Links </q-item-label>
-
-        <EssentialLink
-          v-for="link in essentialLinks"
-          :key="link.title"
-          v-bind="link"
+      <div class="q-pa-md">
+        <b class="text-uppercase">Hierarchical Tilesets</b>
+        <q-option-group
+          v-model="chosenTileset"
+          :options="tilesets"
+          color="primary"
+          @update:model-value="
+            (val, _) => {
+              this.selectTileset(val);
+              this.resetFocus();
+            }
+          "
         />
-      </q-list>
+      </div>
     </q-drawer>
 
     <q-page-container>
@@ -42,48 +47,6 @@
             flex-direction: column;
           "
         >
-          <b class="text-uppercase">Tool</b>
-          <q-btn-toggle
-            ref="layout"
-            tabindex="-1"
-            v-model="tool"
-            class="my-custom-toggle"
-            unelevated
-            toggle-color="primary"
-            color="white"
-            text-color="primary"
-            @click="resetFocus"
-            :options="[
-              { label: '', value: 0, icon: 'brush' },
-              { label: '', value: 1, icon: 'question_mark' },
-            ]"
-          />
-
-          <q-separator style="height: 1px; width: 100%" vertical inset />
-          <b class="text-uppercase">Toggles</b>
-          <q-checkbox
-            size="md"
-            v-model="debug"
-            val="md"
-            label="Debug"
-            @click="resetFocus"
-          />
-
-          <!-- <q-btn-toggle
-            tabindex="-1"
-            v-model="tool"
-            class="my-custom-toggle"
-            unelevated
-            toggle-color="primary"
-            color="white"
-            text-color="primary"
-            :options="[
-              { label: '', value: 0, icon: 'brush' },
-              { label: '', value: 1, icon: 'question_mark' },
-            ]"
-          /> -->
-
-          <q-separator style="height: 1px; width: 100%" vertical inset />
           <b class="text-uppercase">State</b>
           <q-btn-toggle
             tabindex="-1"
@@ -108,7 +71,49 @@
           />
           <q-separator style="height: 1px; width: 100%" vertical inset />
 
-          <b class="text-uppercase">Selected Tile</b>
+          <b class="text-uppercase">Tool</b>
+          <q-btn-toggle
+            ref="layout"
+            tabindex="-1"
+            v-model="tool"
+            class="my-custom-toggle"
+            unelevated
+            toggle-color="primary"
+            color="white"
+            text-color="primary"
+            @click="resetFocus"
+            :options="[
+              { label: '', value: 0, icon: 'brush' },
+              { label: '', value: 1, icon: 'question_mark' },
+            ]"
+          />
+          <q-separator style="height: 1px; width: 100%" vertical inset />
+
+          <b class="text-uppercase">Toggles</b>
+          <q-checkbox
+            size="md"
+            v-model="debug"
+            val="md"
+            label="Debug"
+            @click="resetFocus"
+          />
+          <q-separator style="height: 1px; width: 100%" vertical inset />
+
+          <b class="text-uppercase">Controls</b>
+          <q-btn
+            color="white"
+            text-color="black"
+            label="Reset"
+            @click="
+              () => {
+                reset();
+                resetFocus();
+              }
+            "
+          />
+          <q-separator style="height: 1px; width: 100%" vertical inset />
+
+          <b class="text-uppercase">Tiles</b>
           <q-btn-toggle
             style="flex-direction: column; text-align: left"
             v-model="tile_index"
@@ -189,60 +194,14 @@
 
 <script>
 import { defineComponent, ref, toRaw } from "vue";
-import EssentialLink from "components/EssentialLink.vue";
 import { flatten, round, zeros, matrix, index, isUndefined } from "mathjs";
 
-const linksList = [
-  {
-    title: "Docs",
-    caption: "quasar.dev",
-    icon: "school",
-    link: "https://quasar.dev",
-  },
-  {
-    title: "Github",
-    caption: "github.com/quasarframework",
-    icon: "code",
-    link: "https://github.com/quasarframework",
-  },
-  {
-    title: "Discord Chat Channel",
-    caption: "chat.quasar.dev",
-    icon: "chat",
-    link: "https://chat.quasar.dev",
-  },
-  {
-    title: "Forum",
-    caption: "forum.quasar.dev",
-    icon: "record_voice_over",
-    link: "https://forum.quasar.dev",
-  },
-  {
-    title: "Twitter",
-    caption: "@quasarframework",
-    icon: "rss_feed",
-    link: "https://twitter.quasar.dev",
-  },
-  {
-    title: "Facebook",
-    caption: "@QuasarFramework",
-    icon: "public",
-    link: "https://facebook.quasar.dev",
-  },
-  {
-    title: "Quasar Awesome",
-    caption: "Community Quasar projects",
-    icon: "favorite",
-    link: "https://awesome.quasar.dev",
-  },
-];
+const linksList = [];
 
 export default defineComponent({
   name: "MainLayout",
 
-  components: {
-    EssentialLink,
-  },
+  components: {},
   // 0: [0, 0, 0, 255], // R
   //     1: [50, 130, 50, 255], // G
   //     2: [120, 120, 50, 255], // S
@@ -265,6 +224,8 @@ export default defineComponent({
       worker: undefined,
       tool: 0,
       tiles: [],
+      tilesets: [],
+      chosenTileset: 0,
     };
   },
   computed: {
@@ -276,7 +237,6 @@ export default defineComponent({
     const leftDrawerOpen = ref(false);
 
     return {
-      essentialLinks: linksList,
       leftDrawerOpen,
       toggleLeftDrawer() {
         leftDrawerOpen.value = !leftDrawerOpen.value;
@@ -288,6 +248,11 @@ export default defineComponent({
       document.body.setAttribute("tabindex", "-1");
       document.body.focus();
       document.body.removeAttribute("tabindex");
+    },
+    reset() {
+      this.worker.postMessage({
+        question: "reset",
+      });
     },
     updateCanvas(w, h) {
       const img = this.debug
@@ -305,6 +270,76 @@ export default defineComponent({
           );
       this.context.putImageData(img, 0, 0);
     },
+    selectTileset(path) {
+      import(path).then((json) => {
+        const nodes = json.default.nodes;
+        const nodeCount = Object.keys(nodes).length;
+        let i = 0;
+        const invertedIndex = {};
+        const adjacencies = {
+          U: zeros(nodeCount, nodeCount),
+          D: zeros(nodeCount, nodeCount),
+          L: zeros(nodeCount, nodeCount),
+          R: zeros(nodeCount, nodeCount),
+        };
+
+        const opposingDir = {
+          U: "D",
+          D: "U",
+          L: "R",
+          R: "L",
+        };
+
+        // Build tile array
+        // dagNodes = [];
+        this.tiles = [];
+        for (const n in nodes) {
+          invertedIndex[n] = i;
+          const node = nodes[n];
+          if (node.paintable) {
+            this.tiles.push({ slot: n, color: node.color, value: i });
+          }
+          // dagNodes.push(dagNode);
+
+          i++;
+        }
+
+        // console.log(nodeIndex);
+
+        // Build adjacency matrices
+        for (const n1 in nodes) {
+          const node1 = nodes[n1];
+          for (const dir in node1.adjacencies) {
+            for (const n2 of node1.adjacencies[dir]) {
+              const index1 = invertedIndex[n1];
+              const index2 = invertedIndex[n2];
+              try {
+                adjacencies[dir].set([index1, index2], 1);
+                // adjacencies[dir].set([index2, index1], 1);
+
+                // adjacencies[opposingDir[dir]].set([index2, index1], 1);
+              } catch (error) {
+                console.error(
+                  "Could not set adjacency:",
+                  n1,
+                  name1,
+                  "<->",
+                  n2,
+                  name2
+                );
+              }
+            }
+          }
+        }
+        console.log(adjacencies);
+        // Build adjacency hashmap
+
+        this.worker.postMessage({
+          question: "init",
+          value: [this.width, nodes, adjacencies, invertedIndex],
+        });
+      });
+    },
   },
   mounted() {
     // this.gridState = new GridState(this.width);
@@ -316,73 +351,15 @@ export default defineComponent({
       { type: "module" }
     );
 
-    import(`../assets/data/tileset.json`).then((json) => {
-      const nodes = json.default.nodes;
-      const nodeCount = Object.keys(nodes).length;
-      let i = 0;
-      const invertedIndex = {};
-      const adjacencies = {
-        U: zeros(nodeCount, nodeCount),
-        D: zeros(nodeCount, nodeCount),
-        L: zeros(nodeCount, nodeCount),
-        R: zeros(nodeCount, nodeCount),
-      };
-
-      const opposingDir = {
-        U: "D",
-        D: "U",
-        L: "R",
-        R: "L",
-      };
-
-      // Build tile array
-      // dagNodes = [];
-      for (const n in nodes) {
-        invertedIndex[n] = i;
-        const node = nodes[n];
-        if (node.paintable) {
-          this.tiles.push({ slot: n, color: node.color, value: i });
-        }
-        // dagNodes.push(dagNode);
-
-        i++;
-      }
-
-      // console.log(nodeIndex);
-
-      // Build adjacency matrices
-      for (const n1 in nodes) {
-        const node1 = nodes[n1];
-        for (const dir in node1.adjacencies) {
-          for (const n2 of node1.adjacencies[dir]) {
-            const index1 = invertedIndex[n1];
-            const index2 = invertedIndex[n2];
-            try {
-              adjacencies[dir].set([index1, index2], 1);
-              // adjacencies[dir].set([index2, index1], 1);
-
-              // adjacencies[opposingDir[dir]].set([index2, index1], 1);
-            } catch (error) {
-              console.error(
-                "Could not set adjacency:",
-                n1,
-                name1,
-                "<->",
-                n2,
-                name2
-              );
-            }
-          }
-        }
-      }
-      console.log(adjacencies);
-      // Build adjacency hashmap
-
-      this.worker.postMessage({
-        question: "init",
-        value: [this.width, nodes, adjacencies, invertedIndex],
+    const tilesets = import.meta.glob("../assets/data/*.json");
+    for (const filename in tilesets) {
+      this.tilesets.push({
+        label: filename.split("/").pop().split(".")[0],
+        value: filename,
       });
-    });
+    }
+    this.chosenTileset = this.tilesets[0].value;
+    this.selectTileset(this.chosenTileset);
 
     this.worker.onmessage = ({ data: { gridState, message } }) => {
       this.gridState = gridState;
@@ -440,6 +417,9 @@ export default defineComponent({
         if (this.autoCollapse) {
           this.worker.postMessage({ question: "auto" });
         }
+      }
+      if (e.key === "Escape") {
+        this.leftDrawerOpen = !this.leftDrawerOpen;
       }
     });
     console.log("MOUNTED");

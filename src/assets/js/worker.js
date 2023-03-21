@@ -53,5 +53,7 @@ self.onmessage = ({ data: { question, value } }) => {
   } else if (question === "clear") {
     // console.log("Clearing");
     gridState.clearQueue();
+  } else if (question === "reset") {
+    gridState.initialize();
   }
 };
