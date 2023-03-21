@@ -14,11 +14,11 @@
   "dependencies": {
     "@blakeembrey/deque": "^1.0.5",
     "@quasar/extras": "^1.0.0",
-    "colormap": "^2.3.2",
     "denque": "^2.1.0",
     "double-ended-queue": "^2.1.0-0",
+    "hue-map": "^1.0.0",
     "immutable": "^4.2.4",
-    "mathjs": "github:josdejong/mathjs#develop",
+    "mathjs": "11.7.0",
     "quasar": "^2.6.0",
     "vue": "^3.0.0",
     "vue-focus-lock": "^2.0.5",

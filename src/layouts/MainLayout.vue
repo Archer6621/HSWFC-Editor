@@ -44,6 +44,32 @@
         >
           <b class="text-uppercase">Tool</b>
           <q-btn-toggle
+            ref="layout"
+            tabindex="-1"
+            v-model="tool"
+            class="my-custom-toggle"
+            unelevated
+            toggle-color="primary"
+            color="white"
+            text-color="primary"
+            @click="resetFocus"
+            :options="[
+              { label: '', value: 0, icon: 'brush' },
+              { label: '', value: 1, icon: 'question_mark' },
+            ]"
+          />
+
+          <q-separator style="height: 1px; width: 100%" vertical inset />
+          <b class="text-uppercase">Toggles</b>
+          <q-checkbox
+            size="md"
+            v-model="debug"
+            val="md"
+            label="Debug"
+            @click="resetFocus"
+          />
+
+          <!-- <q-btn-toggle
             tabindex="-1"
             v-model="tool"
             class="my-custom-toggle"
@@ -55,7 +81,8 @@
               { label: '', value: 0, icon: 'brush' },
               { label: '', value: 1, icon: 'question_mark' },
             ]"
-          />
+          /> -->
+
           <q-separator style="height: 1px; width: 100%" vertical inset />
           <b class="text-uppercase">State</b>
           <q-btn-toggle
@@ -65,6 +92,7 @@
             unelevated
             toggle-color="primary"
             color="white"
+            @click="resetFocus"
             text-color="primary"
             @update:model-value="
               (val) => {
@@ -86,6 +114,7 @@
             v-model="tile_index"
             toggle-color="primary"
             color="white"
+            @click="resetFocus"
             dense
             unelevated
             text-color="black"
@@ -115,6 +144,7 @@
             label
             label-always
             switch-label-side
+            @click="resetFocus"
             color="primary"
           />
         </div>
@@ -139,6 +169,17 @@
                     this.gridState?.choices._data?.[this.my]?.[this.mx][i]
                 )
               : []
+          }}
+        </q-badge>
+        <q-badge transparent :align="middle">
+          entropy:
+          {{
+            this.mx >= 0 &&
+            this.mx < this.width &&
+            this.my >= 0 &&
+            this.my < this.height
+              ? this.gridState?.entropy._data?.[this.my]?.[this.mx]
+              : "n/a"
           }}
         </q-badge>
       </q-bar>
@@ -219,11 +260,17 @@ export default defineComponent({
       leftMouseDown: false,
       rightMouseDown: false,
       autoCollapse: false,
+      debug: false,
       tile_index: 0,
       worker: undefined,
       tool: 0,
       tiles: [],
     };
+  },
+  computed: {
+    getWindow() {
+      return window;
+    },
   },
   setup() {
     const leftDrawerOpen = ref(false);
@@ -237,12 +284,25 @@ export default defineComponent({
     };
   },
   methods: {
+    resetFocus() {
+      document.body.setAttribute("tabindex", "-1");
+      document.body.focus();
+      document.body.removeAttribute("tabindex");
+    },
     updateCanvas(w, h) {
-      var img = new ImageData(
-        Uint8ClampedArray.from(flatten(toRaw(this.gridState).image._data)),
-        w,
-        h
-      );
+      const img = this.debug
+        ? new ImageData(
+            Uint8ClampedArray.from(
+              flatten(toRaw(this.gridState).entropyImage._data)
+            ),
+            w,
+            h
+          )
+        : new ImageData(
+            Uint8ClampedArray.from(flatten(toRaw(this.gridState).image._data)),
+            w,
+            h
+          );
       this.context.putImageData(img, 0, 0);
     },
   },

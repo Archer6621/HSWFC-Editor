@@ -30,8 +30,7 @@ import {
 
 import { Deque } from "@blakeembrey/deque";
 import { Map, Set } from "immutable";
-import * as colormap from "colormap";
-// let colormap = require("colormap");
+import { createPalette } from "hue-map";
 
 class Target {
   constructor(x, y) {
@@ -99,12 +98,11 @@ export class GridState {
     this.tileset = tileset;
     this.ALL = range(0, this.gridChoices);
     this.COLOR = range(0, 4);
-    // this.entropyColors = colormap({
-    //   colormap: "jet",
-    //   nshades: this.gridChoices,
-    //   format: "float",
-    //   alpha: 1,
-    // });
+    this.entropyColors = createPalette({
+      map: "autumn",
+      steps: this.gridChoices,
+    }).format("rgba");
+    console.log(this.entropyColors);
     this.index = setCartesian(range(0, gridSize), range(0, gridSize));
     this.offsets = [
       new Target(1, 0),
@@ -305,10 +303,10 @@ export class GridState {
       ones(gridSize, gridSize, 4),
       this.colorMap[this.root.index]
     );
-    // this.entropyImage = dotMultiply(
-    //   dotMultiply(ones(gridSize, gridSize, 4), 255),
-    //   this.entropyColors[this.gridChoices - 1]
-    // );
+    this.entropyImage = dotMultiply(
+      ones(gridSize, gridSize, 4),
+      this.entropyColors[this.gridChoices - 1]
+    );
     this.entropy = dotMultiply(ones(gridSize, gridSize), this.gridChoices);
   }
 
@@ -332,7 +330,7 @@ export class GridState {
   }
 
   getCellEntropy(x, y) {
-    return this.chosenTileDepth(x, y);
+    return this.bitmaskSum(x, y);
   }
 
   // TODO: potentially this one is bullshit right now
@@ -428,10 +426,13 @@ export class GridState {
     this.image.subset(index(x, y, this.COLOR), this.colorMap[choice]);
 
     // For debugging purposes
-    // this.entropyImage.subset(
-    //   index(x, y, this.COLOR),
-    //   this.colorMap[this.entropy.get([x, y])]
-    // );
+    const entr = this.entropy.get([x, y]);
+    this.entropyImage.subset(
+      index(x, y, this.COLOR),
+      entr <= this.entropyColors.length
+        ? this.entropyColors[entr - 1]
+        : [0, 0, 0, 255]
+    );
 
     this.propagate(x, y);
 
@@ -606,9 +607,17 @@ export class GridState {
             if (sum(xor(pre, post)) > 0) {
               const newChoices = map(post, sign);
               this.choices.subset(index(nx, ny, this.ALL), newChoices);
-              this.entropy.subset(index(nx, ny), this.getCellEntropy(nx, ny));
+              const entr = this.getCellEntropy(nx, ny);
+              this.entropy.subset(index(nx, ny), entr);
 
               q.push(new Target(nx, ny));
+              this.entropyImage.subset(
+                index(nx, ny, this.COLOR),
+                entr <= this.entropyColors.length
+                  ? this.entropyColors[entr - 1]
+                  : [0, 0, 0, 255]
+              );
+
               // this.entropyImage.subset(
               //   index(nx, ny, this.COLOR),
               //   dotMultiply(this.entropyColors[this.entropy.get([nx, ny])], 255)
