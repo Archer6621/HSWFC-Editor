@@ -8,13 +8,20 @@
   "scripts": {
     "lint": "eslint --ext .js,.vue ./",
     "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
-    "test": "echo \"No test specified\" && exit 0"
+    "test": "echo \"No test specified\" && exit 0",
+    "deploy": "push-dir --dir=dist/spa --remote=gh-pages --branch=gh-pages"
   },
   "dependencies": {
+    "@blakeembrey/deque": "^1.0.5",
     "@quasar/extras": "^1.0.0",
-    "mathjs": "^11.5.1",
+    "colormap": "^2.3.2",
+    "denque": "^2.1.0",
+    "double-ended-queue": "^2.1.0-0",
+    "immutable": "^4.2.4",
+    "mathjs": "github:josdejong/mathjs#develop",
     "quasar": "^2.6.0",
     "vue": "^3.0.0",
+    "vue-focus-lock": "^2.0.5",
     "vue-router": "^4.0.0"
   },
   "devDependencies": {
@@ -24,7 +31,8 @@
     "eslint-config-prettier": "^8.1.0",
     "eslint-plugin-vue": "^9.0.0",
     "postcss": "^8.4.14",
-    "prettier": "^2.5.1"
+    "prettier": "^2.5.1",
+    "push-dir": "^0.4.1"
   },
   "engines": {
     "node": "^18 || ^16 || ^14.19",
