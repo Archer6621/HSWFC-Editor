@@ -226,6 +226,7 @@ export default defineComponent({
       tiles: [],
       tilesets: [],
       chosenTileset: 0,
+      importedTilesets: [],
     };
   },
   computed: {
@@ -271,73 +272,86 @@ export default defineComponent({
       this.context.putImageData(img, 0, 0);
     },
     selectTileset(path) {
-      import(path).then((json) => {
-        const nodes = json.default.nodes;
-        const nodeCount = Object.keys(nodes).length;
-        let i = 0;
-        const invertedIndex = {};
-        const adjacencies = {
-          U: zeros(nodeCount, nodeCount),
-          D: zeros(nodeCount, nodeCount),
-          L: zeros(nodeCount, nodeCount),
-          R: zeros(nodeCount, nodeCount),
-        };
+      for (const c in toRaw(this.importedTilesets)) {
+        console.log(c);
+      }
 
-        const opposingDir = {
-          U: "D",
-          D: "U",
-          L: "R",
-          R: "L",
-        };
+      console.log(
+        toRaw(this.importedTilesets),
+        path,
+        toRaw(this.importedTilesets)[path]
+      );
+      console.log(
+        toRaw(this.importedTilesets)["../assets/data/1_dev_tileset.json"]
+      );
 
-        // Build tile array
-        // dagNodes = [];
-        this.tiles = [];
-        for (const n in nodes) {
-          invertedIndex[n] = i;
-          const node = nodes[n];
-          if (node.paintable) {
-            this.tiles.push({ slot: n, color: node.color, value: i });
-          }
-          // dagNodes.push(dagNode);
+      const json = toRaw(toRaw(this.importedTilesets)[path]);
 
-          i++;
+      const nodes = json.nodes;
+      const nodeCount = Object.keys(nodes).length;
+      let i = 0;
+      const invertedIndex = {};
+      const adjacencies = {
+        U: zeros(nodeCount, nodeCount),
+        D: zeros(nodeCount, nodeCount),
+        L: zeros(nodeCount, nodeCount),
+        R: zeros(nodeCount, nodeCount),
+      };
+
+      const opposingDir = {
+        U: "D",
+        D: "U",
+        L: "R",
+        R: "L",
+      };
+
+      // Build tile array
+      // dagNodes = [];
+      this.tiles = [];
+      for (const n in nodes) {
+        invertedIndex[n] = i;
+        const node = nodes[n];
+        if (node.paintable) {
+          this.tiles.push({ slot: n, color: node.color, value: i });
         }
+        // dagNodes.push(dagNode);
 
-        // console.log(nodeIndex);
+        i++;
+      }
 
-        // Build adjacency matrices
-        for (const n1 in nodes) {
-          const node1 = nodes[n1];
-          for (const dir in node1.adjacencies) {
-            for (const n2 of node1.adjacencies[dir]) {
-              const index1 = invertedIndex[n1];
-              const index2 = invertedIndex[n2];
-              try {
-                adjacencies[dir].set([index1, index2], 1);
-                // adjacencies[dir].set([index2, index1], 1);
+      // console.log(nodeIndex);
 
-                // adjacencies[opposingDir[dir]].set([index2, index1], 1);
-              } catch (error) {
-                console.error(
-                  "Could not set adjacency:",
-                  n1,
-                  name1,
-                  "<->",
-                  n2,
-                  name2
-                );
-              }
+      // Build adjacency matrices
+      for (const n1 in nodes) {
+        const node1 = nodes[n1];
+        for (const dir in node1.adjacencies) {
+          for (const n2 of node1.adjacencies[dir]) {
+            const index1 = invertedIndex[n1];
+            const index2 = invertedIndex[n2];
+            try {
+              adjacencies[dir].set([index1, index2], 1);
+              // adjacencies[dir].set([index2, index1], 1);
+
+              // adjacencies[opposingDir[dir]].set([index2, index1], 1);
+            } catch (error) {
+              console.error(
+                "Could not set adjacency:",
+                n1,
+                name1,
+                "<->",
+                n2,
+                name2
+              );
             }
           }
         }
-        console.log(adjacencies);
-        // Build adjacency hashmap
+      }
+      console.log(adjacencies);
+      // Build adjacency hashmap
 
-        this.worker.postMessage({
-          question: "init",
-          value: [this.width, nodes, adjacencies, invertedIndex],
-        });
+      this.worker.postMessage({
+        question: "init",
+        value: [this.width, nodes, adjacencies, invertedIndex],
       });
     },
   },
@@ -352,14 +366,22 @@ export default defineComponent({
     );
 
     const tilesets = import.meta.glob("../assets/data/*.json");
+    let i = 0;
     for (const filename in tilesets) {
-      this.tilesets.push({
-        label: filename.split("/").pop().split(".")[0],
-        value: filename,
+      tilesets[filename]().then((module) => {
+        this.importedTilesets.push(module.default);
+        this.tilesets.push({
+          label: filename.split("/").pop().split(".")[0],
+          value: i,
+        });
+        if (i === 0) {
+          this.chosenTileset = this.tilesets[0].value;
+          this.selectTileset(this.chosenTileset);
+        }
+        i++;
       });
     }
-    this.chosenTileset = this.tilesets[0].value;
-    this.selectTileset(this.chosenTileset);
+    console.log(this.importedTilesets);
 
     this.worker.onmessage = ({ data: { gridState, message } }) => {
       this.gridState = gridState;
