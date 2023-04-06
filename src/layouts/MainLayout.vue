@@ -857,8 +857,57 @@ export default defineComponent({
       }
     });
 
-    // TODO: add touch support, see: https://stackoverflow.com/questions/9975352/javascript-html5-canvas-drawing-instead-of-dragging-scrolling-on-mobile-devic
+    // TOUCH SUPPORT
+    // TODO: Extract common elements to methods, so mouse/touch can use the same interface
+    canvas.ontouchstart = function (e) {
+      if (e.touches.length === 1) {
+        this.leftMouseDown = true;
+        this.worker.postMessage({ question: "clear" });
+        this.checkpoint();
+        this.worker.postMessage({ question: "lock" });
 
+        if (this.tool == 0) {
+          paintCanvas(canvas, e);
+        } else if (this.tool == 1) {
+          this.worker.postMessage({ question: "info", value: [] });
+        }
+      }
+      return false;
+    };
+    canvas.ontouchend = function (e) {
+      this.leftMouseDown = false;
+      this.worker.postMessage({ question: "unlock" });
+    };
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      if (e.touches) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        this.mx = round(
+          ((this.width + 1) * (touch.clientX - rect.left)) /
+            canvas.offsetWidth -
+            1
+        );
+        this.my = round(
+          ((this.height + 1) * (touch.clientY - rect.top)) /
+            canvas.offsetHeight -
+            1
+        );
+
+        if (this.leftMouseDown && this.tool == 0) {
+          paintCanvas(canvas, e);
+        }
+      }
+    });
+    document.body.addEventListener(
+      "touchmove",
+      function (event) {
+        event.preventDefault();
+      },
+      false
+    );
+
+    // Add placeholders for snapshots
     for (const _ of range(0, this.snapshotCount)) {
       this.imageUrl.push(
         new URL("../assets/default.png", import.meta.url).href
