@@ -1,9 +1,18 @@
 // app global css in SCSS form
 
 #wfc {
-  width: 50%;
-  height: 50%;
+  width: 40%;
+  height: 40%;
   image-rendering: pixelated;
   border: 4px solid lightgray;
   // cursor: crosshair;
+}
+
+.q-tree__node-header:has(div > .selectedtree) {
+  background-color: lighten($primary, 30);
+  transition: background-color 0.5s;
+  // cursor: crosshair;
+}
+.selectedtree {
+  color: $dark;
 }

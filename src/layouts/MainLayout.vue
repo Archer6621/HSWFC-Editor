@@ -10,7 +10,6 @@
           aria-label="Menu"
           @click="toggleLeftDrawer"
         />
-
         <q-toolbar-title> HSWFC Editor </q-toolbar-title>
 
         <div>Quasar v{{ $q.version }}</div>
@@ -43,7 +42,7 @@
             display: flex;
             padding: 16px;
 
-            width: 200px;
+            width: 300px;
             flex-direction: column;
           "
         >
@@ -70,7 +69,76 @@
             ]"
           />
           <q-separator style="height: 1px; width: 100%" vertical inset />
+          <b class="text-uppercase">Tiles</b>
+          <div class="q-pa-md q-gutter-sm">
+            <q-tree
+              :nodes="tileTree"
+              default-expand-all
+              v-model:selected="tile_index"
+              :duration="50"
+              v-model:expanded="expanded"
+              node-key="key"
+              @click="resetFocus"
+              @update:expanded="resetFocus"
+            >
+              <template v-slot:default-header="prop">
+                <div
+                  class="row items-center"
+                  v-bind:class="{
+                    selectedtree: prop.tree.selected === prop.node.key,
+                  }"
+                >
+                  <q-icon
+                    name="square"
+                    left
+                    :style="`color: rgb(${prop.node.color[0]}, ${prop.node.color[1]}, ${prop.node.color[2]})`"
+                  ></q-icon>
+                  <div class="text-weight-bold">
+                    {{ prop.node.label }}
+                    <!-- {{  ? ">" : "" }} -->
+                    <!-- {{ print(prop) }} -->
+                    <!-- {{ prop }} -->
+                  </div>
+                </div>
+              </template>
+            </q-tree>
+          </div>
 
+          <!-- <q-btn-toggle
+            style="flex-direction: column; text-align: left"
+            v-model="tile_index"
+            toggle-color="primary"
+            color="white"
+            @click="resetFocus"
+            dense
+            unelevated
+            text-color="black"
+            :options="this.tiles"
+          >
+            <template v-for="tile in this.tiles" v-slot:[tile.slot] :key="tile">
+              <q-icon
+                name="square"
+                left
+                :style="`color: rgb(${tile.color[0]}, ${tile.color[1]}, ${tile.color[2]})`"
+              ></q-icon>
+              <div>
+                {{ tile.slot }}
+              </div>
+              <q-space />
+            </template>
+          </q-btn-toggle> -->
+          <q-separator style="height: 1px; width: 100%" vertical inset />
+        </div>
+
+        <div
+          style="
+            display: flex;
+            padding: 16px;
+
+            width: 300px;
+            flex-direction: column;
+          "
+        >
           <b class="text-uppercase">Tool</b>
           <q-btn-toggle
             ref="layout"
@@ -100,68 +168,230 @@
           <q-separator style="height: 1px; width: 100%" vertical inset />
 
           <b class="text-uppercase">Controls</b>
-          <q-btn
-            color="white"
-            text-color="black"
-            label="Reset"
-            @click="
-              () => {
-                reset();
-                resetFocus();
-              }
-            "
-          />
-          <q-separator style="height: 1px; width: 100%" vertical inset />
-
-          <b class="text-uppercase">Tiles</b>
-          <q-btn-toggle
-            style="flex-direction: column; text-align: left"
-            v-model="tile_index"
-            toggle-color="primary"
-            color="white"
-            @click="resetFocus"
-            dense
-            unelevated
-            text-color="black"
-            :options="this.tiles"
-          >
-            <template v-for="tile in this.tiles" v-slot:[tile.slot] :key="tile">
-              <q-icon
-                name="square"
-                left
-                :style="`color: rgb(${tile.color[0]}, ${tile.color[1]}, ${tile.color[2]})`"
-              ></q-icon>
-              <div>
-                {{ tile.slot }}
-              </div>
-              <q-space />
-            </template>
-          </q-btn-toggle>
+          <div class="q-gutter-sm col-auto no-wrap">
+            <span class="row">
+              <q-btn
+                color="white"
+                class="col"
+                text-color="black"
+                label="Step"
+                :ripple="false"
+                @click="
+                  () => {
+                    oneStep();
+                    resetFocus();
+                  }
+                "
+              />
+            </span>
+            <span class="row">
+              <q-btn
+                color="white"
+                class="col"
+                text-color="black"
+                label="Suggest"
+                :ripple="false"
+                @click="
+                  () => {
+                    suggest();
+                    resetFocus();
+                  }
+                "
+              />
+            </span>
+            <span class="row">
+              <q-btn
+                color="white"
+                text-color="black"
+                class="col"
+                icon="undo"
+                :disable="!canUndo"
+                @click="
+                  () => {
+                    undo();
+                    resetFocus();
+                  }
+                "
+              />
+              <q-btn
+                color="white"
+                text-color="black"
+                class="col"
+                icon="redo"
+                :disable="!canRedo"
+                @click="
+                  () => {
+                    redo();
+                    resetFocus();
+                  }
+                "
+              />
+            </span>
+            <span class="row">
+              <q-btn
+                color="white"
+                class="col"
+                text-color="black"
+                label="Reset"
+                @click="
+                  () => {
+                    reset();
+                    resetFocus();
+                  }
+                "
+              />
+            </span>
+          </div>
           <q-separator style="height: 1px; width: 100%" vertical inset />
 
           <b class="text-uppercase">Brush Size</b>
-          <q-slider
-            v-model="size"
-            :min="1"
-            :max="9"
-            :step="2"
-            snap
-            label
-            label-always
-            switch-label-side
-            @click="resetFocus"
-            color="primary"
-          />
+          <q-item>
+            <q-item-section avatar>
+              <b>{{ this.size }}</b>
+            </q-item-section>
+            <q-item-section>
+              <q-slider
+                v-model="size"
+                :min="1"
+                :max="9"
+                :step="2"
+                snap
+                @change="resetFocus"
+                color="primary"
+              />
+            </q-item-section>
+          </q-item>
+
+          <q-separator style="height: 1px; width: 100%" vertical inset />
+
+          <b class="text-uppercase">Speed</b>
+
+          <q-item>
+            <q-item-section avatar>
+              <b>{{ this.stepSize }}</b>
+            </q-item-section>
+            <q-item-section>
+              <q-slider
+                v-model="stepSize"
+                :min="1"
+                :max="128"
+                :step="1"
+                snap
+                @click="resetFocus"
+                @change="
+                  () => {
+                    setStepSize();
+                    resetFocus();
+                  }
+                "
+                color="primary"
+              />
+            </q-item-section>
+          </q-item>
+
+          <q-separator style="height: 1px; width: 100%" vertical inset />
         </div>
+      </span>
+      <span style="display: flex">
+        <q-card
+          v-for="(url, index) in this.imageUrl"
+          :key="index"
+          class="q-ma-sm"
+          style="width: 140px"
+        >
+          <q-img
+            @click="
+              {
+                imagePopup[index] = true;
+              }
+            "
+            :src="url"
+          >
+          </q-img>
+
+          <q-dialog v-model="imagePopup[index]">
+            <q-card>
+              <q-card-section class="row items-center q-pb-none">
+                <q-space />
+                <q-btn icon="close" flat round dense v-close-popup />
+              </q-card-section>
+
+              <q-card-section>
+                <q-img
+                  style="
+                    width: 500px;
+                    height: 500px;
+                    image-rendering: pixelated;
+                  "
+                  @click="
+                    {
+                      imagePopup[index] = true;
+                    }
+                  "
+                  :src="url"
+                >
+                </q-img>
+              </q-card-section>
+              <q-card-actions align="around">
+                <q-btn
+                  style="width: 100px; height: 32px"
+                  class="q-mx-xs"
+                  size="md"
+                  icon="upload"
+                  color="white"
+                  @click="
+                    () => {
+                      loadSnapshot(index);
+                      resetFocus();
+                      imagePopup[index] = false;
+                    }
+                  "
+                  text-color="black"
+                ></q-btn>
+              </q-card-actions>
+            </q-card>
+          </q-dialog>
+
+          <q-card-actions align="around">
+            <q-btn
+              style="width: 24px; height: 16px"
+              class="q-mx-xs"
+              size="sm"
+              icon="upload"
+              color="white"
+              @click="
+                () => {
+                  loadSnapshot(index);
+                  resetFocus();
+                }
+              "
+              text-color="black"
+            ></q-btn>
+            <q-btn
+              style="width: 24px; height: 16px"
+              class="q-mx-xs"
+              size="sm"
+              icon="download"
+              color="white"
+              @click="
+                () => {
+                  setSnapshot(index);
+                  resetFocus();
+                }
+              "
+              text-color="black"
+            ></q-btn>
+          </q-card-actions>
+        </q-card>
       </span>
     </q-page-container>
 
     <q-footer>
       <q-bar dense class="bg-grey">
-        <q-badge transparent :align="middle">
+        <q-badge transparent :align="'middle'">
           x: {{ this.mx }} | y: {{ this.my }}
         </q-badge>
-        <q-badge transparent :align="middle">
+        <q-badge transparent :align="'middle'">
           <!-- lmao -->
           choices:
           {{
@@ -169,21 +399,20 @@
             this.mx < this.width &&
             this.my >= 0 &&
             this.my < this.height
-              ? this.gridState?.nameIndex?.filter(
-                  (_, i) =>
-                    this.gridState?.choices._data?.[this.my]?.[this.mx][i]
+              ? this.grid?.nameIndex?.filter(
+                  (_, i) => this.grid?.choices._data?.[this.my]?.[this.mx][i]
                 )
               : []
           }}
         </q-badge>
-        <q-badge transparent :align="middle">
+        <q-badge transparent :align="'middle'">
           entropy:
           {{
             this.mx >= 0 &&
             this.mx < this.width &&
             this.my >= 0 &&
             this.my < this.height
-              ? this.gridState?.entropy._data?.[this.my]?.[this.mx]
+              ? this.grid?.entropy._data?.[this.my]?.[this.mx]
               : "n/a"
           }}
         </q-badge>
@@ -193,10 +422,18 @@
 </template>
 
 <script>
-import { defineComponent, ref, toRaw } from "vue";
-import { flatten, round, zeros, matrix, index, isUndefined } from "mathjs";
-
-const linksList = [];
+import { defineComponent, ref, toRaw, nextTick } from "vue";
+import {
+  flatten,
+  round,
+  zeros,
+  matrix,
+  index,
+  isUndefined,
+  ones,
+  range,
+  floor,
+} from "mathjs";
 
 export default defineComponent({
   name: "MainLayout",
@@ -208,13 +445,14 @@ export default defineComponent({
   //     3: [70, 70, 255, 255], // W
   data() {
     return {
-      width: 32,
-      height: 32,
+      width: 64,
+      height: 64,
       mx: 0,
       my: 0,
       size: 1,
+      stepSize: 1,
       intervalId: undefined,
-      gridState: undefined,
+      grid: undefined,
       context: undefined,
       leftMouseDown: false,
       rightMouseDown: false,
@@ -224,9 +462,17 @@ export default defineComponent({
       worker: undefined,
       tool: 0,
       tiles: [],
+      tileTree: [{ label: "none", color: [0, 0, 0] }],
       tilesets: [],
       chosenTileset: 0,
       importedTilesets: [],
+      ctrlDown: false,
+      expanded: [0],
+      canRedo: false,
+      canUndo: false,
+      snapshotCount: 4,
+      imageUrl: [],
+      imagePopup: [],
     };
   },
   computed: {
@@ -244,6 +490,7 @@ export default defineComponent({
       },
     };
   },
+
   methods: {
     resetFocus() {
       document.body.setAttribute("tabindex", "-1");
@@ -255,21 +502,98 @@ export default defineComponent({
         question: "reset",
       });
     },
+    loadSnapshot(i) {
+      this.checkpoint();
+      this.worker.postMessage({ question: "load snapshot", value: i });
+    },
+    setSnapshot(i) {
+      this.imageUrl[i] = this.getCanvasImageURL();
+      this.worker.postMessage({ question: "snapshot", value: i });
+    },
+    getCanvasImageURL() {
+      var canvas = document.getElementById("wfc");
+      if (canvas) {
+        this.context = canvas.getContext("2d");
+        return canvas.toDataURL("image/png");
+      } else {
+        return "";
+      }
+    },
+    checkpoint() {
+      this.worker.postMessage({ question: "checkpoint" });
+      // Any operation that creates a checkpoint invalidates our redo stack (unless we start using some funny merge strategies..)
+      // this.canRedo = false;
+    },
+    undo() {
+      this.worker.postMessage({
+        question: "undo",
+      });
+    },
+    getRange(x) {
+      return range(0, x);
+    },
+    print(t) {
+      console.log(t);
+    },
+    redo() {
+      this.worker.postMessage({
+        question: "redo",
+      });
+    },
+    setStepSize() {
+      this.worker.postMessage({ question: "step", value: this.stepSize });
+    },
     updateCanvas(w, h) {
+      const matrix = toRaw(this.grid).image._data;
+
+      for (const i of range(0, this.size)._data) {
+        for (const j of range(0, this.size)._data) {
+          let index = matrix[this.my + i - floor(this.size / 2)];
+          if (index) {
+            index = index[this.mx + j - floor(this.size / 2)];
+          }
+          if (index) {
+            index[0] = 255;
+          }
+        }
+      }
+
       const img = this.debug
         ? new ImageData(
             Uint8ClampedArray.from(
-              flatten(toRaw(this.gridState).entropyImage._data)
+              flatten(toRaw(this.grid).entropyImage._data)
             ),
             w,
             h
           )
-        : new ImageData(
-            Uint8ClampedArray.from(flatten(toRaw(this.gridState).image._data)),
-            w,
-            h
-          );
+        : new ImageData(Uint8ClampedArray.from(flatten(matrix)), w, h);
       this.context.putImageData(img, 0, 0);
+    },
+    oneStep() {
+      this.checkpoint();
+      this.worker.postMessage({ question: "onestep" });
+    },
+    suggest(i = 0) {
+      const old = this.worker.onmessage;
+      this.worker.onmessage = ({ data: { grid, message } }) => {
+        if (message === "doneStep") {
+          this.worker.onmessage = old;
+          this.grid = grid;
+          this.updateCanvas(this.width, this.height);
+          this.setSnapshot(i);
+          this.undo();
+          this.updateCanvas(this.width, this.height);
+
+          if (i < this.snapshotCount - 1) {
+            this.suggest(i + 1);
+          }
+        }
+      };
+      this.checkpoint();
+      this.worker.postMessage({
+        question: "onestep",
+        value: 8 * this.stepSize,
+      });
     },
     selectTileset(path) {
       for (const c in toRaw(this.importedTilesets)) {
@@ -308,8 +632,10 @@ export default defineComponent({
       // Build tile array
       // dagNodes = [];
       this.tiles = [];
+      const nodeArray = [];
       for (const n in nodes) {
         invertedIndex[n] = i;
+        nodeArray.push(nodes[n]);
         const node = nodes[n];
         if (node.paintable) {
           this.tiles.push({ slot: n, color: node.color, value: i });
@@ -318,6 +644,31 @@ export default defineComponent({
 
         i++;
       }
+
+      // Build tile tree
+      const treeNodeArray = [];
+      console.log(treeNodeArray);
+
+      for (const n in nodes) {
+        const nodeIndex = invertedIndex[n];
+        const node = nodeArray[nodeIndex];
+        const treeNode = {};
+        treeNode.color = node.color;
+        treeNode.key = nodeIndex;
+        treeNode.label = n;
+        treeNodeArray.push(treeNode);
+      }
+
+      for (const tn of treeNodeArray) {
+        const node = nodeArray[tn.key];
+        const treeNode = treeNodeArray[tn.key];
+        treeNode.children = [];
+        for (const childName in node.children) {
+          treeNode.children.push(treeNodeArray[invertedIndex[childName]]);
+        }
+      }
+
+      this.tileTree = [treeNodeArray[invertedIndex["root"]]];
 
       // console.log(nodeIndex);
 
@@ -356,7 +707,6 @@ export default defineComponent({
     },
   },
   mounted() {
-    // this.gridState = new GridState(this.width);
     var canvas = document.getElementById("wfc");
     this.context = canvas.getContext("2d");
 
@@ -383,8 +733,12 @@ export default defineComponent({
     }
     console.log(this.importedTilesets);
 
-    this.worker.onmessage = ({ data: { gridState, message } }) => {
-      this.gridState = gridState;
+    this.worker.onmessage = ({ data: { grid, message } }) => {
+      this.grid = grid;
+      if (message === "doneUpdate") {
+        this.canRedo = grid.canRedo;
+        this.canUndo = grid.canUndo;
+      }
       this.updateCanvas(this.width, this.height);
       if (message === "doneAuto" && this.autoCollapse) {
         this.worker.postMessage({ question: "auto" });
@@ -404,6 +758,7 @@ export default defineComponent({
       });
     };
     canvas.addEventListener("mousemove", (e) => {
+      e.preventDefault();
       const rect = canvas.getBoundingClientRect();
       this.mx = round(
         ((this.width + 1) * (e.clientX - rect.left)) / canvas.offsetWidth - 1
@@ -417,10 +772,26 @@ export default defineComponent({
       }
     });
 
+    //   const event = new MouseEvent("click", {
+    //   view: window,
+    //   bubbles: true,
+    //   cancelable: true,
+    // });
+    // const cb = document.getElementById("checkbox");
+    // const cancelled = !cb.dispatchEvent(event);
+
+    // TODO: Probably nicer to detect mouseup outside of the element
+    // canvas.addEventListener("mouseout", (e) => {
+    //   this.leftMouseDown = false;
+    // });
     canvas.addEventListener("mousedown", (e) => {
+      e.preventDefault();
       if (e.button == 0) {
         this.leftMouseDown = true;
         this.worker.postMessage({ question: "clear" });
+        this.checkpoint();
+        this.worker.postMessage({ question: "lock" });
+
         if (this.tool == 0) {
           paintCanvas(canvas, e);
         } else if (this.tool == 1) {
@@ -428,22 +799,72 @@ export default defineComponent({
         }
       }
     });
-    canvas.addEventListener("mouseup", (e) => {
+    document.addEventListener("mouseup", (e) => {
       if (e.button == 0) {
         this.leftMouseDown = false;
+        this.worker.postMessage({ question: "unlock" });
       }
     });
     window.addEventListener("keydown", (e) => {
+      this.ctrlDown = e.ctrlKey;
+      if (e.key === "ArrowLeft") {
+        this.undo();
+      }
+
+      if (e.key === "ArrowRight") {
+        this.oneStep();
+      }
+      for (const i of range(1, this.snapshotCount + 1)) {
+        if (e.key === `${i.value}` && this.ctrlDown) {
+          this.loadSnapshot(i.value - 1);
+        }
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      this.ctrlDown = e.ctrlKey;
+    });
+    window.addEventListener("keypress", (e) => {
       if (e.key === " ") {
         this.autoCollapse = !this.autoCollapse;
         if (this.autoCollapse) {
+          this.checkpoint();
           this.worker.postMessage({ question: "auto" });
         }
       }
       if (e.key === "Escape") {
         this.leftDrawerOpen = !this.leftDrawerOpen;
       }
+      // CTRL + Z is special...
+      if (this.ctrlDown && e.key.charCodeAt(0) == 26) {
+        this.undo();
+      }
+
+      // So is CTRL + Y...
+      if (this.ctrlDown && e.key.charCodeAt(0) == 25) {
+        this.redo();
+      }
+
+      if (e.key === "r") {
+        this.reset();
+      }
+      if (e.key === "s") {
+        this.oneStep();
+      }
+      for (const i of range(1, this.snapshotCount + 1)) {
+        if (e.key === `${i.value}`) {
+          this.setSnapshot(i.value - 1);
+        }
+      }
     });
+
+    // TODO: add touch support, see: https://stackoverflow.com/questions/9975352/javascript-html5-canvas-drawing-instead-of-dragging-scrolling-on-mobile-devic
+
+    for (const _ of range(0, this.snapshotCount)) {
+      this.imageUrl.push(
+        new URL("../assets/default.png", import.meta.url).href
+      );
+    }
+
     console.log("MOUNTED");
   },
 });

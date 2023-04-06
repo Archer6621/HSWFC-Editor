@@ -63,7 +63,7 @@ module.exports = configure(function (/* ctx */) {
       publicPath: "/hswfc-editor-dev",
       // analyze: true,
       // env: {},
-      // rawDefine: {}
+      rawDefine: {},
       // ignorePublicFolder: true,
       // minify: false,
       // polyfillModulePreload: true,

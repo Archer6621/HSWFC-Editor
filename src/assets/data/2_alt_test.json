@@ -4,7 +4,7 @@
       "paintable": true,
       "generate": true,
       "color": [0, 0, 0],
-      "children": { "forest": 5, "water": 8, "plains": 1 },
+      "children": { "forest": 1, "water": 8, "plains": 12 },
       "adjacencies": {
         "U": ["root"],
         "D": ["root"],
@@ -28,7 +28,7 @@
       "paintable": true,
       "generate": true,
       "color": [150, 120, 150],
-      "children": { "grass": 1, "sand": 1 },
+      "children": { "grass": 8, "sand": 1 },
       "adjacencies": {
         "U": ["plains"],
         "D": ["plains"],

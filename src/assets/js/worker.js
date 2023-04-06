@@ -1,8 +1,9 @@
-import { GridState } from "./HSWFC.js";
+import { Grid } from "./HSWFC.js";
 
-let gridState;
+let grid;
 const batchSize = 256;
-const autoStepSize = 16;
+let autoStepSize = 1;
+let lock = false;
 
 self.onmessage = ({ data: { question, value } }) => {
   if (question === "init") {
@@ -11,16 +12,23 @@ self.onmessage = ({ data: { question, value } }) => {
     const adjacencies = value[2];
     const index = value[3];
 
-    gridState = new GridState(width, tileset, adjacencies, index);
+    grid = new Grid(width, tileset, adjacencies, index, autoStepSize);
     self.postMessage({
-      gridState: gridState,
+      grid: grid.getState(),
       message: "doneInit",
     });
   } else if (question === "update") {
     for (let i = 0; i < batchSize; i++) {
-      gridState.update();
+      grid.update();
     }
-    self.postMessage({ gridState: gridState, message: "doneUpdate" });
+    self.postMessage({
+      grid: {
+        ...grid.getState(),
+        canRedo: grid.redoStack.length > 0,
+        canUndo: grid.undoStack.length > 0,
+      },
+      message: "doneUpdate",
+    });
   } else if (question === "manual") {
     const x = value[1];
     const y = value[0];
@@ -37,23 +45,44 @@ self.onmessage = ({ data: { question, value } }) => {
         j < Math.floor(y + markerSize / 2) + 1;
         j++
       ) {
-        if (
-          i >= 0 &&
-          i < gridState.gridSize &&
-          j >= 0 &&
-          j < gridState.gridSize
-        ) {
-          gridState.manualCollapse(i, j, tileIndex);
+        if (i >= 0 && i < grid.gridSize && j >= 0 && j < grid.gridSize) {
+          grid.manualCollapse(i, j, tileIndex);
         }
       }
     }
   } else if (question === "auto") {
-    gridState.autoCollapse(autoStepSize);
-    self.postMessage({ gridState: gridState, message: "doneAuto" });
+    if (!lock) {
+      grid.autoCollapse(autoStepSize);
+    }
+    self.postMessage({ grid: grid.getState(), message: "doneAuto" });
   } else if (question === "clear") {
     // console.log("Clearing");
-    gridState.clearQueue();
+    grid.clearQueue();
   } else if (question === "reset") {
-    gridState.initialize();
+    grid.initialize();
+  } else if (question === "undo") {
+    grid.undo();
+  } else if (question === "redo") {
+    grid.redo();
+  } else if (question === "checkpoint") {
+    grid.checkpoint();
+  } else if (question === "step") {
+    autoStepSize = value;
+  } else if (question === "onestep") {
+    if (value) {
+      grid.autoCollapse(value);
+    } else {
+      grid.autoCollapse(autoStepSize);
+    }
+    grid.update();
+    self.postMessage({ grid: grid.getState(), message: "doneStep" });
+  } else if (question === "lock") {
+    lock = true;
+  } else if (question === "unlock") {
+    lock = false;
+  } else if (question === "snapshot") {
+    grid.snapshot(value);
+  } else if (question === "load snapshot") {
+    grid.loadSnapshot(value);
   }
 };
