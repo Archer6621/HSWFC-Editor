@@ -859,7 +859,7 @@ export default defineComponent({
 
     // TOUCH SUPPORT
     // TODO: Extract common elements to methods, so mouse/touch can use the same interface
-    canvas.ontouchstart = function (e) {
+    canvas.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
         this.leftMouseDown = true;
         this.worker.postMessage({ question: "clear" });
@@ -873,11 +873,11 @@ export default defineComponent({
         }
       }
       return false;
-    };
-    canvas.ontouchend = function (e) {
+    });
+    canvas.addEventListener("touchend", (e) => {
       this.leftMouseDown = false;
       this.worker.postMessage({ question: "unlock" });
-    };
+    });
     canvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
       if (e.touches) {
