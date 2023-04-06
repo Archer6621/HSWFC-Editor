@@ -40,8 +40,8 @@ import { createPalette } from "hue-map";
 // import BTree from "sorted-btree";
 // import { SoMap, SoSet } from "somap";
 // import * as ProperSkipList from "proper-skip-list";
-import * as SortedSet from "redis-sorted-set";
-
+import Z from "redis-sorted-set";
+const SortedSet = Z;
 // class QTNode {
 //   constructor(parent, xStart, xSize, yStart, ySize) {
 //     this.xStart = xStart;
