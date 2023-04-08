@@ -18,6 +18,7 @@
     "collections": "^5.1.13",
     "denque": "^2.1.0",
     "double-ended-queue": "^2.1.0-0",
+    "eigen": "^0.2.0",
     "hue-map": "^1.0.0",
     "immutable": "^4.2.4",
     "mathjs": "11.7.0",
@@ -41,7 +42,8 @@
     "eslint-plugin-vue": "^9.0.0",
     "postcss": "^8.4.14",
     "prettier": "^2.5.1",
-    "push-dir": "^0.4.1"
+    "push-dir": "^0.4.1",
+    "rollup-plugin-node-builtins": "^2.1.2"
   },
   "engines": {
     "node": "^18 || ^16 || ^14.19",

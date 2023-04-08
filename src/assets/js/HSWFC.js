@@ -30,6 +30,9 @@ import {
   isUndefined,
   forEach,
 } from "mathjs";
+import "./init";
+import eig from "eigen";
+
 
 import { Deque } from "@blakeembrey/deque";
 import { Map, Set } from "immutable";
