@@ -350,12 +350,14 @@ export class Grid {
       this.gridSize,
       this.gridSize,
     ]);
-    this.offsets = [
-      new Target(1, 0),
-      new Target(-1, 0),
-      new Target(0, 1),
-      new Target(0, -1),
-    ];
+    this.offsets = new Map(
+      Object.entries({
+        D: new Target(1, 0),
+        U: new Target(-1, 0),
+        L: new Target(0, 1),
+        R: new Target(0, -1),
+      })
+    );
 
     this.colorMap = new Array(this.gridChoices);
     this.allowed = new Array(this.gridChoices);
@@ -444,20 +446,25 @@ export class Grid {
       }
     }
 
-    console.log(
-      "rootpaths1:",
-      this.pathMap.get(invertedIndex["grass"]).get(invertedIndex["root"])
-    );
+    // console.log(
+    //   "rootpaths1:",
+    //   this.pathMap.get(invertedIndex["grass"]).get(invertedIndex["root"])
+    // );
 
-    console.log(
-      "rootpaths2:",
-      this.pathMap.get(invertedIndex["tree"]).get(invertedIndex["root"])
-    );
+    // console.log(
+    //   "rootpaths2:",
+    //   this.pathMap.get(invertedIndex["tree"]).get(invertedIndex["root"])
+    // );
 
     // NOTE: If the adjacencies are bad, a giant propagation wave can be triggered right at the start, explains the lag-spike
     // TODO: Directional adjacencies
-    this.adj = matrix(adjacencies.U._data);
-    this.adjaug = clone(this.adj);
+    this.adj = new Map();
+    this.adjaug = new Map();
+    this.offsets.forEach((_, key) => {
+      const mat = matrix(adjacencies[key]._data);
+      this.adj = this.adj.set(key, mat);
+      this.adjaug = this.adjaug.set(key, clone(mat));
+    });
 
     // this.allowed = matrix([0, 1, 1, 1, 1]);
 
@@ -479,38 +486,53 @@ export class Grid {
     //     queue += list(archetype.archetypes.values())
 
     // Augment the adjacencies
-    const q = [];
-    for (const leaf of this.root.leaves().keys()) {
-      for (const parent of leaf.incoming.keys()) {
-        q.push([parent, leaf]);
+    this.offsets.forEach((_, key) => {
+      console.log(key);
+      const q = [];
+      for (const leaf of this.root.leaves().keys()) {
+        for (const parent of leaf.incoming.keys()) {
+          q.push([parent, leaf]);
+        }
       }
-    }
-    while (q.length > 0) {
-      const nodes = q.pop();
-      const node = nodes[0];
-      const child = nodes[1];
+      while (q.length > 0) {
+        const nodes = q.pop();
+        const node = nodes[0];
+        const child = nodes[1];
 
-      // const allowed = map(apply(and(cur, this.adj), 1, sum), sign);
-      const augmented = squeeze(
-        map(
-          add(
-            this.adjaug.subset(index(child.index, this.ALL)),
-            this.adjaug.subset(index(node.index, this.ALL))
-          ),
-          sign
-        )
-      );
-      this.adjaug.subset(index(node.index, this.ALL), augmented);
-      this.adjaug.subset(index(this.ALL, node.index), augmented);
 
-      // console.log(this.adj.subset(index(child.index, this.ALL)));
-      // console.log();
-      // console.log(hue);
+        // const allowed = map(apply(and(cur, this.adj), 1, sum), sign);
 
-      for (const parent of node.incoming.keys()) {
-        q.push([parent, node]);
+        const augmentedH = squeeze(
+          map(
+            add(
+              this.adjaug.get(key).subset(index(child.index, this.ALL)),
+              this.adjaug.get(key).subset(index(node.index, this.ALL))
+            ),
+            sign
+          )
+        );
+        const augmentedV = squeeze(
+          map(
+            add(
+              this.adjaug.get(key).subset(index(this.ALL, child.index)),
+              this.adjaug.get(key).subset(index(this.ALL, node.index))
+            ),
+            sign
+          )
+        );
+        this.adjaug.get(key).subset(index(node.index, this.ALL), augmentedH);
+        this.adjaug.get(key).subset(index(this.ALL, node.index), augmentedV);
+
+        // console.log(this.adj.subset(index(child.index, this.ALL)));
+        // console.log();
+        // console.log(hue);
+
+        for (const parent of node.incoming.keys()) {
+          q.push([parent, node]);
+        }
       }
-    }
+    });
+
     console.log(this.nodeIndex);
     console.log(this.adjaug);
 
@@ -1047,7 +1069,7 @@ export class Grid {
     while (q.size > 0) {
       const p = q.pop();
 
-      this.offsets.forEach((o) => {
+      this.offsets.forEach((o, k) => {
         const nx = p.x + o.x;
         const ny = p.y + o.y;
         if (nx >= 0 && nx < this.gridSize && ny >= 0 && ny < this.gridSize) {
@@ -1073,7 +1095,7 @@ export class Grid {
               // }
 
               let adjacencies = squeeze(
-                this.adjaug.subset(index(idx, this.ALL))
+                this.adjaug.get(k).subset(index(idx, this.ALL))
               );
 
               // // Path Check
@@ -1243,12 +1265,19 @@ export class Grid {
               // this.bufferEntropy(nx, ny, entropyValue);
               // this.entropyQT.set(this.targets.get([nx, ny]), entropyValue);
               q.push(new Target(nx, ny));
-              this.entropyImage.subset(
-                index(nx, ny, this.COLOR),
-                entropyValue <= this.entropyColors.length
-                  ? this.entropyColors[round(entropyValue) - 1]
-                  : [0, 0, 0, 255]
-              );
+              try {
+                this.entropyImage.subset(
+                  index(nx, ny, this.COLOR),
+                  entropyValue <= this.entropyColors.length
+                    ? this.entropyColors[round(entropyValue) - 1]
+                    : [0, 0, 0, 255]
+                );
+              } catch {
+                this.entropyImage.subset(
+                  index(nx, ny, this.COLOR),
+                  [255, 0, 0, 255]
+                );
+              }
 
               // this.entropyImage.subset(
               //   index(nx, ny, this.COLOR),
