@@ -724,6 +724,9 @@ export default defineComponent({
           label: filename.split("/").pop().split(".")[0],
           value: i,
         });
+        this.tilesets = this.tilesets.sort((a, b) =>
+          a.label > b.label ? 1 : -1
+        );
         if (i === 0) {
           this.chosenTileset = this.tilesets[0].value;
           this.selectTileset(this.chosenTileset);
