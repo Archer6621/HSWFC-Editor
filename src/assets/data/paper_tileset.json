@@ -1,0 +1,241 @@
+{
+  "nodes": {
+    "root": {
+      "paintable": true,
+      "generate": true,
+      "color": [0, 0, 0],
+      "children": { "water": 1, "land": 1, "village": 1 },
+      "adjacencies": {
+        "U": ["root"],
+        "D": ["root"],
+        "L": ["root"],
+        "R": ["root"]
+      }
+    },
+    "forest": {
+      "paintable": true,
+      "generate": true,
+      "color": [100, 230, 100],
+      "children": { "grass": 1, "tree": 1 },
+      "adjacencies": {
+        "U": ["forest"],
+        "D": ["forest"],
+        "L": ["forest"],
+        "R": ["forest"]
+      }
+    },
+    "land": {
+      "paintable": true,
+      "generate": true,
+      "color": [190, 190, 190],
+      "children": { "grass": 1, "forest": 1, "sand": 1 },
+      "adjacencies": {
+        "U": ["land"],
+        "D": ["land"],
+        "L": ["land"],
+        "R": ["land"]
+      }
+    },
+    "grass": {
+      "paintable": true,
+      "generate": true,
+      "color": [50, 130, 50],
+      "children": {},
+      "adjacencies": {
+        "U": ["grass", "sand", "tree", "cBL", "cBR", "wHB"],
+        "D": ["grass", "sand", "tree", "cTL", "cTR", "wHT"],
+        "L": ["grass", "sand", "tree", "cBR", "cTR", "wVR"],
+        "R": ["grass", "sand", "tree", "cBL", "cTL", "wVL"]
+      }
+    },
+    "sand": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 120, 50],
+      "children": {},
+      "adjacencies": {
+        "U": ["sand", "water", "grass"],
+        "D": ["sand", "water", "grass"],
+        "L": ["sand", "water", "grass"],
+        "R": ["sand", "water", "grass"]
+      }
+    },
+    "water": {
+      "paintable": true,
+      "generate": true,
+      "color": [70, 70, 255],
+      "children": {},
+      "adjacencies": {
+        "U": ["water", "sand"],
+        "D": ["water", "sand"],
+        "L": ["water", "sand"],
+        "R": ["water", "sand"]
+      }
+    },
+    "tree": {
+      "paintable": true,
+      "generate": true,
+      "color": [20, 70, 20],
+      "children": {},
+      "adjacencies": {
+        "U": ["grass"],
+        "D": ["grass"],
+        "L": ["grass"],
+        "R": ["grass"]
+      }
+    },
+    "village": {
+      "paintable": true,
+      "generate": true,
+      "color": [190, 0, 190],
+      "children": { "water": 1, "sand": 1, "grass": 1, "house": 10 },
+      "adjacencies": {
+        "U": ["village"],
+        "D": ["village"],
+        "L": ["village"],
+        "R": ["village"]
+      }
+    },
+    "house": {
+      "paintable": true,
+      "generate": true,
+      "color": [190, 150, 120],
+      "children": { "wall": 1, "floor": 1, "grass": 0 },
+      "adjacencies": {
+        "U": ["house"],
+        "D": ["house"],
+        "L": ["house"],
+        "R": ["house"]
+      }
+    },
+    "wall": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 120, 120],
+      "children": {
+        "wHT": 1,
+        "wHB": 1,
+        "wVL": 1,
+        "wVR": 1,
+        "cTL": 1,
+        "cBL": 1,
+        "cTR": 1,
+        "cBR": 1
+      },
+      "adjacencies": {
+        "U": ["wall"],
+        "D": ["wall"],
+        "L": ["wall"],
+        "R": ["wall"]
+      }
+    },
+    "wHT": {
+      "paintable": true,
+      "generate": true,
+      "color": [140, 90, 60],
+      "children": {},
+      "adjacencies": {
+        "U": ["grass"],
+        "D": ["floor"],
+        "L": ["cTL", "wHT"],
+        "R": ["wHT", "cTR"]
+      }
+    },
+    "wHB": {
+      "paintable": true,
+      "generate": true,
+      "color": [140, 90, 60],
+      "children": {},
+      "adjacencies": {
+        "U": ["floor"],
+        "D": ["grass"],
+        "L": ["wHB", "cBL"],
+        "R": ["wHB", "cBR"]
+      }
+    },
+    "wVL": {
+      "paintable": true,
+      "generate": true,
+      "color": [140, 90, 60],
+      "children": {},
+      "adjacencies": {
+        "U": ["cTL", "wVL"],
+        "D": ["wVL", "cBL"],
+        "L": ["grass"],
+        "R": ["floor"]
+      }
+    },
+    "wVR": {
+      "paintable": true,
+      "generate": true,
+      "color": [140, 90, 60],
+      "children": {},
+      "adjacencies": {
+        "U": ["wVR", "cTR"],
+        "D": ["wVR", "cBR"],
+        "L": ["floor"],
+        "R": ["grass"]
+      }
+    },
+    "cTL": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 70, 40],
+      "children": {},
+      "adjacencies": {
+        "U": ["grass"],
+        "D": ["wVL"],
+        "L": ["grass"],
+        "R": ["wHT"]
+      }
+    },
+    "cTR": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 70, 40],
+      "children": {},
+      "adjacencies": {
+        "U": ["grass"],
+        "D": ["wVR"],
+        "L": ["wHT"],
+        "R": ["grass"]
+      }
+    },
+    "cBL": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 70, 40],
+      "children": {},
+      "adjacencies": {
+        "U": ["wVL"],
+        "D": ["grass"],
+        "L": ["grass"],
+        "R": ["wHB"]
+      }
+    },
+    "cBR": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 70, 40],
+      "children": {},
+      "adjacencies": {
+        "U": ["wVR"],
+        "D": ["grass"],
+        "L": ["wHB"],
+        "R": ["grass"]
+      }
+    },
+    "floor": {
+      "paintable": true,
+      "generate": true,
+      "color": [120, 120, 60],
+      "children": {},
+      "adjacencies": {
+        "U": ["floor", "wHT"],
+        "D": ["floor", "wHB"],
+        "L": ["floor", "wVL"],
+        "R": ["floor", "wVR"]
+      }
+    }
+  }
+}

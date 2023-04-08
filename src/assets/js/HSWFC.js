@@ -354,8 +354,8 @@ export class Grid {
       Object.entries({
         D: new Target(1, 0),
         U: new Target(-1, 0),
-        L: new Target(0, 1),
-        R: new Target(0, -1),
+        L: new Target(0, -1),
+        R: new Target(0, 1),
       })
     );
 
@@ -498,7 +498,6 @@ export class Grid {
         const nodes = q.pop();
         const node = nodes[0];
         const child = nodes[1];
-
 
         // const allowed = map(apply(and(cur, this.adj), 1, sum), sign);
 
@@ -790,6 +789,7 @@ export class Grid {
   }
 
   loadGridState(gridState) {
+    console.log("Loaded gridstate: ", gridState);
     this.current = gridState;
     this.clearQueue();
     this.choices = clone(gridState.choices);
@@ -1094,10 +1094,6 @@ export class Grid {
               //   continue;
               // }
 
-              let adjacencies = squeeze(
-                this.adjaug.get(k).subset(index(idx, this.ALL))
-              );
-
               // // Path Check
               // let skip = false;
               // if (!this.LM.get([idx])) {
@@ -1142,6 +1138,9 @@ export class Grid {
 
               // allowedAdjacencies = add(allowedAdjacencies, adjacencies);
               if (this.LM.get([idx])) {
+                let adjacencies = squeeze(
+                  this.adjaug.get(k).subset(index(idx, this.ALL))
+                );
                 allowedAdjacencies = add(allowedAdjacencies, adjacencies);
               }
             }
@@ -1217,7 +1216,11 @@ export class Grid {
             // console.log("sep");
 
             const post = and(pre, allowedAdjacencies);
-
+            for (const idx of this.indices(post._data, true)) {
+              if (!this.LM.get([idx]) && sum(and(this.CM[idx], post)) === 0) {
+                post.set([idx], false);
+              }
+            }
             // Algo
             // 1.) get the indices of the currently allowed tiles
             // 2.) get all their submasks; these indicate which tiles are all in their subtree
