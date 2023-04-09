@@ -1249,15 +1249,15 @@ export class Grid {
             // console.log(pre.print("?"));
             const postinter = pre.matSub(
               allowedAdjacencies
-                .clampSelf(-1, 0)
-                .transposeSelf()
-                .matAddSelf(new eig.Matrix.ones(this.gridChoices, 1))
+                .clamp(-1, 0)
+                .transpose()
+                .matAdd(new eig.Matrix.ones(this.gridChoices, 1))
             );
-            const post = postinter.block(0, 0, this.gridChoices, 1);
-            post.clampSelf(0, 1);
+            let post = postinter.block(0, 0, this.gridChoices, 1);
+            post = post.clamp(0, 1);
             // post.print("urmom");
             // pre.print("PRE");
-            allowedAdjacencies.clampSelf(0, 1); //.print("ADJ");
+            allowedAdjacencies = allowedAdjacencies.clamp(0, 1); //.print("ADJ");
 
             // postinter.print("orig");
             // post.clampSelf(0, 1);
