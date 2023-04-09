@@ -33,7 +33,6 @@ import {
 import "./init";
 import eig from "eigen";
 
-
 import { Deque } from "@blakeembrey/deque";
 import { Map, Set } from "immutable";
 import { createPalette } from "hue-map";
@@ -460,7 +459,6 @@ export class Grid {
     // );
 
     // NOTE: If the adjacencies are bad, a giant propagation wave can be triggered right at the start, explains the lag-spike
-    // TODO: Directional adjacencies
     this.adj = new Map();
     this.adjaug = new Map();
     this.offsets.forEach((_, key) => {
@@ -535,38 +533,53 @@ export class Grid {
       }
     });
 
-    console.log(this.nodeIndex);
-    console.log(this.adjaug);
+    // async () => {
+    //   await eig.ready;
+    //   this.adjaug = eig.Matrix(this.adjaug._data);
+    //   this.adjaug.print("M");
 
-    console.log(this.indices([2, 23, 1, 2, 3, 4, 52, 2], 2));
+    //   console.log("??", this.adjaug);
+    // };
 
-    // Build masks
-    this.SM = {};
-    this.CM = {};
-    this.LM = zeros(this.gridChoices);
-    for (const n in tileset) {
-      const node = this.nodeIndex[n];
-      const children = [];
-      const subMask = zeros(this.gridChoices);
-      const childMask = zeros(this.gridChoices);
-      children.push(...node.outgoing.keys());
-      for (const c of children) {
-        childMask.set([c.index], 1);
+    (async () => {
+      await eig.ready;
+      this.offsets.forEach((_, key) => {
+        this.adjaug = this.adjaug.set(
+          key,
+          new eig.Matrix(this.adjaug.get(key)._data)
+        );
+      });
+
+      console.log(this.nodeIndex);
+
+      console.log(this.indices([2, 23, 1, 2, 3, 4, 52, 2], 2));
+
+      // Build masks
+      this.SM = {};
+      this.CM = {};
+      this.LM = new eig.Matrix(this.gridChoices, 1, 0); //zeros(this.gridChoices);
+      for (const n in tileset) {
+        const node = this.nodeIndex[n];
+        const children = [];
+        const subMask = zeros(this.gridChoices);
+        const childMask = zeros(this.gridChoices);
+        children.push(...node.outgoing.keys());
+        for (const c of children) {
+          childMask.set([c.index], 1);
+        }
+
+        while (children.length > 0) {
+          var child = children.pop();
+          subMask.set([child.index], 1);
+          children.push(...child.outgoing.keys());
+        }
+        this.SM[node.index] = subMask;
+        this.CM[node.index] = childMask;
+        if (node.outgoing.size == 0) {
+          this.LM.set(node.index, 1);
+        }
       }
-
-      while (children.length > 0) {
-        var child = children.pop();
-        subMask.set([child.index], 1);
-        children.push(...child.outgoing.keys());
-      }
-      this.SM[node.index] = subMask;
-      this.CM[node.index] = childMask;
-      if (node.outgoing.size == 0) {
-        this.LM.set([node.index], 1);
-      }
-    }
-    console.log(this.LM);
-
+    })();
     this.initialize();
   }
 
@@ -1076,20 +1089,28 @@ export class Grid {
         const nx = p.x + o.x;
         const ny = p.y + o.y;
         if (nx >= 0 && nx < this.gridSize && ny >= 0 && ny < this.gridSize) {
-          const pre = squeeze(this.choices.subset(index(nx, ny, this.ALL)));
-          const cur = squeeze(this.choices.subset(index(p.x, p.y, this.ALL)));
+          const pre = new eig.Matrix(
+            squeeze(this.choices.subset(index(nx, ny, this.ALL)))._data
+          );
+          const cur = new eig.Matrix(
+            squeeze(this.choices.subset(index(p.x, p.y, this.ALL)))._data
+          );
 
           // If the neighbouring tile is not at a leaf yet (1 choice), or is not contradicting (0 choices)
           // TODO: refine this definition, 1 choice can also mean meta-tile that is unable to collapse downwards
-          if (sum(pre) > 1) {
+          if (pre.sum() > 1) {
             // console.log();
             // const curChosen = this.chosen.get([p.x, p.y]);
             // cur.set([curChosen], this.LM.get([curChosen]));
             // const allowed = map(apply(and(cur, this.adjaug), 1, sum), sign);
-            let allowedAdjacencies = zeros(this.gridChoices);
+            let allowedAdjacencies = eig.Matrix.constant(
+              1,
+              this.gridChoices,
+              0
+            );
             // console.log(cur._data);
             //
-            for (const idx of this.indices(cur._data)) {
+            for (let idx = 0; idx < this.gridChoices; idx++) {
               // if (
               //   idx == this.chosen.subset(index(p.x, p.y)) &&
               //   !this.LM.get([idx])
@@ -1140,11 +1161,17 @@ export class Grid {
               // }
 
               // allowedAdjacencies = add(allowedAdjacencies, adjacencies);
-              if (this.LM.get([idx])) {
-                let adjacencies = squeeze(
-                  this.adjaug.get(k).subset(index(idx, this.ALL))
-                );
-                allowedAdjacencies = add(allowedAdjacencies, adjacencies);
+              if (this.LM.get(idx) > 0 && cur.get(idx) > 0) {
+                const v1 = this.adjaug
+                  .get(k)
+                  .block(idx, 0, 1, this.gridChoices);
+                allowedAdjacencies.matSubSelf(v1);
+                // allowedAdjacencies.print("DISALLOWED POST: ");
+
+                // let adjacencies = squeeze(
+                //   this.adjaug.get(k).subset(index(idx, this.ALL))
+                // );
+                // allowedAdjacencies = add(allowedAdjacencies, adjacencies);
               }
             }
             // console.log(allowed, allowedAdjacencies);
@@ -1218,12 +1245,29 @@ export class Grid {
             // console.log(map(add(accPre, pre), sign));
             // console.log("sep");
 
-            const post = and(pre, allowedAdjacencies);
-            for (const idx of this.indices(post._data, true)) {
-              if (!this.LM.get([idx]) && sum(and(this.CM[idx], post)) === 0) {
-                post.set([idx], false);
-              }
-            }
+            // const post = and(pre, allowedAdjacencies);
+            // console.log(pre.print("?"));
+            const postinter = pre.matSub(
+              allowedAdjacencies
+                .clampSelf(-1, 0)
+                .transposeSelf()
+                .matAddSelf(new eig.Matrix.ones(this.gridChoices, 1))
+            );
+            const post = postinter.block(0, 0, this.gridChoices, 1);
+            post.clampSelf(0, 1);
+            // post.print("urmom");
+            // pre.print("PRE");
+            allowedAdjacencies.clampSelf(0, 1); //.print("ADJ");
+
+            // postinter.print("orig");
+            // post.clampSelf(0, 1);
+
+            // TODO: Fix this as well, and then eigen should be done.
+            // for (const idx of this.indices(post._data, true)) {
+            //   if (!this.LM.get([idx]) && sum(and(this.CM[idx], post)) === 0) {
+            //     post.set([idx], false);
+            //   }
+            // }
             // Algo
             // 1.) get the indices of the currently allowed tiles
             // 2.) get all their submasks; these indicate which tiles are all in their subtree
@@ -1231,9 +1275,18 @@ export class Grid {
 
             // TODO: Remove childless metatiles after determining which ones are allowed
             // TODO: Think of a better way to handle this?
-            // console.log("SUMXOR:", sum(xor(pre, post)));
-            if (sum(xor(pre, post)) > 0) {
-              const newChoices = map(post, sign);
+            // console.lo g("SUMXOR:", sum(xor(pre, post)));
+            // pre.print("PRE");
+            // post.print("POST");
+            const diff = pre.matSubSelf(post).sum();
+            // console.log(diff);
+            if (diff !== 0) {
+              const newChoices = [];
+              for (let i = 0; i < this.gridChoices; i++) {
+                newChoices[i] = post.get(i, 0);
+              }
+              // console.log("NEW", newChoices);
+              // const newChoices = map(post, sign);
               this.choices.subset(index(nx, ny, this.ALL), newChoices);
               if (painted) {
                 this.painted._data[nx][ny] = 1;
