@@ -400,7 +400,12 @@
             this.my >= 0 &&
             this.my < this.height
               ? this.grid?.nameIndex?.filter(
-                  (_, i) => this.grid?.choices._data?.[this.my]?.[this.mx][i]
+                  (_, i) =>
+                    this.grid?.choices?.[
+                      i +
+                        this.tiles.length * this.my +
+                        this.tiles.length * this.height * this.mx
+                    ]
                 )
               : []
           }}
