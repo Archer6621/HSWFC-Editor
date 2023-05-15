@@ -100,7 +100,7 @@
       "paintable": true,
       "generate": true,
       "color": [190, 150, 120],
-      "children": { "wall": 1, "floor": 1, "grass": 0 },
+      "children": { "wall": 1, "floor": 1, "grass": 0.000001 },
       "adjacencies": {
         "U": ["house"],
         "D": ["house"],
