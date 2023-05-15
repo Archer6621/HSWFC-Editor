@@ -13,9 +13,12 @@ self.onmessage = ({ data: { question, value } }) => {
     const index = value[3];
 
     grid = new Grid(width, tileset, adjacencies, index, autoStepSize);
-    self.postMessage({
-      grid: grid.getState(),
-      message: "doneInit",
+
+    grid.initialize().then(() => {
+      self.postMessage({
+        grid: grid.getState(),
+        message: "doneInit",
+      });
     });
   } else if (question === "update") {
     for (let i = 0; i < batchSize; i++) {

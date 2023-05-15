@@ -18,7 +18,7 @@
     "collections": "^5.1.13",
     "denque": "^2.1.0",
     "double-ended-queue": "^2.1.0-0",
-    "eigen": "^0.2.0",
+    "eigen": "https://github.com/Archer6621/eigen-js",
     "hue-map": "^1.0.0",
     "immutable": "^4.2.4",
     "mathjs": "11.7.0",
