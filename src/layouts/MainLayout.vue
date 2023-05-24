@@ -36,7 +36,15 @@
     <q-page-container>
       <!-- <router-view /> -->
       <span style="display: flex">
-        <canvas id="wfc" :width="this.width" :height="this.height"></canvas>
+        <div class="canvasHolder">
+          <canvas id="wfc" :width="this.width" :height="this.height"></canvas>
+          <canvas
+            id="highlight"
+            :width="this.width"
+            :height="this.height"
+          ></canvas>
+        </div>
+
         <div
           style="
             display: flex;
@@ -46,30 +54,12 @@
             flex-direction: column;
           "
         >
-          <b class="text-uppercase">State</b>
-          <q-btn-toggle
-            tabindex="-1"
-            v-model="autoCollapse"
-            class="my-custom-toggle"
-            unelevated
-            toggle-color="primary"
-            color="white"
-            @click="resetFocus"
-            text-color="primary"
-            @update:model-value="
-              (val) => {
-                if (val) {
-                  this.worker.postMessage({ question: 'auto' });
-                }
-              }
-            "
-            :options="[
-              { label: 'Paused', value: false },
-              { label: 'Collapsing', value: true },
-            ]"
-          />
-          <q-separator style="height: 1px; width: 100%" vertical inset />
-          <b class="text-uppercase">Tiles</b>
+          <!-- <b class="text-uppercase">State</b> -->
+
+          <!-- <q-separator style="height: 1px; width: 100%" vertical inset /> -->
+          <b class="text-uppercase" title="The tiles that can be painted with"
+            >Tiles</b
+          >
           <div class="q-pa-md q-gutter-sm">
             <q-tree
               :nodes="tileTree"
@@ -139,7 +129,7 @@
             flex-direction: column;
           "
         >
-          <b class="text-uppercase">Tool</b>
+          <!-- <b class="text-uppercase">Tool</b>
           <q-btn-toggle
             ref="layout"
             tabindex="-1"
@@ -153,16 +143,18 @@
             :options="[
               { label: '', value: 0, icon: 'brush' },
               { label: '', value: 1, icon: 'question_mark' },
+              { label: '', value: 2, icon: 'edit' },
             ]"
           />
-          <q-separator style="height: 1px; width: 100%" vertical inset />
+          <q-separator style="height: 1px; width: 100%" vertical inset /> -->
 
           <b class="text-uppercase">Toggles</b>
           <q-checkbox
+            title="Shows the entropy of the grid instead of the tiles"
             size="md"
             v-model="debug"
             val="md"
-            label="Debug"
+            label="Show Entropy"
             @click="resetFocus"
           />
           <q-separator style="height: 1px; width: 100%" vertical inset />
@@ -171,10 +163,11 @@
           <div class="q-gutter-sm col-auto no-wrap">
             <span class="row">
               <q-btn
+                title="Solve for one step, which is sized according to the set solve speed below"
                 color="white"
                 class="col"
                 text-color="black"
-                label="Step"
+                icon="skip_next"
                 :ripple="false"
                 @click="
                   () => {
@@ -184,8 +177,9 @@
                 "
               />
             </span>
-            <span class="row">
+            <!-- <span class="row">
               <q-btn
+
                 color="white"
                 class="col"
                 text-color="black"
@@ -198,9 +192,10 @@
                   }
                 "
               />
-            </span>
+            </span> -->
             <span class="row">
               <q-btn
+                title="Undo"
                 color="white"
                 text-color="black"
                 class="col"
@@ -214,6 +209,7 @@
                 "
               />
               <q-btn
+                title="Redo"
                 color="white"
                 text-color="black"
                 class="col"
@@ -229,6 +225,7 @@
             </span>
             <span class="row">
               <q-btn
+                title="Reset the grid completely"
                 color="white"
                 class="col"
                 text-color="black"
@@ -244,9 +241,48 @@
           </div>
           <q-separator style="height: 1px; width: 100%" vertical inset />
 
-          <b class="text-uppercase">Brush Size</b>
+          <b class="text-uppercase" title="Size of the paint brush"
+            >Brush Size</b
+          >
+
           <q-item>
-            <q-item-section avatar>
+            <q-btn-toggle
+              title="Size of the paint brush"
+              v-model="size"
+              toggle-color="primary"
+              :options="[
+                {
+                  icon: 'img:dot-xs.svg',
+                  value: 1,
+                },
+                { icon: 'img:dot-s.svg', value: 5 },
+                { icon: 'img:dot-m.svg', value: 9 },
+                { icon: 'img:dot.svg', value: 15 },
+              ]"
+              @click="resetFocus"
+              @update:model-value="resetFocus"
+            />
+            <!-- <q-btn
+              color="white"
+              text-color="black"
+              icon="remove"
+              @click="this.size++"
+            />
+            <q-separator vertical />
+            <q-space />
+            {{ this.size }}
+            <q-space />
+
+            <q-separator vertical />
+            <q-btn
+              color="white"
+              text-color="black"
+              icon="add"
+              @click="this.size--"
+            />
+            <q-space /> -->
+
+            <!-- <q-item-section avatar>
               <b>{{ this.size }}</b>
             </q-item-section>
             <q-item-section>
@@ -259,15 +295,35 @@
                 @change="resetFocus"
                 color="primary"
               />
-            </q-item-section>
+            </q-item-section> -->
           </q-item>
 
           <q-separator style="height: 1px; width: 100%" vertical inset />
 
-          <b class="text-uppercase">Speed</b>
+          <b class="text-uppercase" title="Speed at which the WFC solver runs"
+            >Solve Speed</b
+          >
 
           <q-item>
-            <q-item-section avatar>
+            <q-btn-toggle
+              title="Speed at which the WFC solver runs"
+              v-model="stepSize"
+              toggle-color="primary"
+              :options="[
+                { icon: 'fa-solid fa-person-walking', value: 1 },
+                { icon: 'fa-solid fa-person-running', value: 5 },
+                { icon: 'fa-solid fa-person-biking', value: 15 },
+                { icon: 'fa-solid fa-truck-fast', value: 50 },
+              ]"
+              @click="resetFocus"
+              @update:model-value="
+                () => {
+                  setStepSize();
+                  resetFocus();
+                }
+              "
+            />
+            <!-- <q-item-section avatar>
               <b>{{ this.stepSize }}</b>
             </q-item-section>
             <q-item-section>
@@ -286,14 +342,14 @@
                 "
                 color="primary"
               />
-            </q-item-section>
+            </q-item-section> -->
           </q-item>
 
           <q-separator style="height: 1px; width: 100%" vertical inset />
         </div>
       </span>
       <span style="display: flex">
-        <q-card
+        <!-- <q-card
           v-for="(url, index) in this.imageUrl"
           :key="index"
           class="q-ma-sm"
@@ -382,7 +438,31 @@
               text-color="black"
             ></q-btn>
           </q-card-actions>
-        </q-card>
+        </q-card> -->
+        <q-space></q-space>
+        <q-btn-toggle
+          title="Pauses or resumes the automatic collapser, based on the configured solve speed (space)"
+          tabindex="-1"
+          size="xl"
+          v-model="autoCollapse"
+          class="my-custom-toggle"
+          toggle-color="primary"
+          color="white"
+          @click="resetFocus"
+          text-color="primary"
+          @update:model-value="
+            (val) => {
+              if (val) {
+                this.worker.postMessage({ question: 'auto' });
+              }
+            }
+          "
+          :options="[
+            { icon: 'pause', value: false },
+            { icon: 'play_arrow', value: true },
+          ]"
+        />
+        <q-space></q-space>
       </span>
     </q-page-container>
 
@@ -395,19 +475,35 @@
           <!-- lmao -->
           choices:
           {{
+            //  Formula: c + C * y + C * Y * x
             this.mx >= 0 &&
             this.mx < this.width &&
             this.my >= 0 &&
             this.my < this.height
               ? this.grid?.nameIndex?.filter(
-                  (_, i) =>
+                  (n) =>
                     this.grid?.choices?.[
-                      i +
-                        this.tiles.length * this.my +
-                        this.tiles.length * this.height * this.mx
+                      this.grid?.invertedIndex[n] +
+                        this.grid?.nameIndex.length * this.mx + // TODO: Investigate why this is flipped compared to the algorithm...
+                        this.grid?.nameIndex.length * this.height * this.my
                     ]
                 )
               : []
+          }}
+        </q-badge>
+        <q-badge transparent :align="'middle'">
+          <!-- lmao -->
+          current:
+          {{
+            //  Formula: c + C * y + C * Y * x
+            this.mx >= 0 &&
+            this.mx < this.width &&
+            this.my >= 0 &&
+            this.my < this.height
+              ? this.grid?.nameIndex?.[
+                  this.grid?.chosen._data?.[this.my]?.[this.mx]
+                ]
+              : "n/a"
           }}
         </q-badge>
         <q-badge transparent :align="'middle'">
@@ -438,6 +534,7 @@ import {
   ones,
   range,
   floor,
+  sin,
 } from "mathjs";
 
 export default defineComponent({
@@ -450,15 +547,19 @@ export default defineComponent({
   //     3: [70, 70, 255, 255], // W
   data() {
     return {
+      time: 0,
       width: 64,
       height: 64,
       mx: 0,
       my: 0,
-      size: 1,
-      stepSize: 1,
+      mxp: 0,
+      myp: 0,
+      size: 5,
+      stepSize: 5,
       intervalId: undefined,
       grid: undefined,
       context: undefined,
+      highlightContext: undefined,
       leftMouseDown: false,
       rightMouseDown: false,
       autoCollapse: false,
@@ -472,12 +573,15 @@ export default defineComponent({
       chosenTileset: 0,
       importedTilesets: [],
       ctrlDown: false,
-      expanded: [0],
+      expanded: [],
       canRedo: false,
       canUndo: false,
       snapshotCount: 4,
       imageUrl: [],
       imagePopup: [],
+      paintBuffer: [],
+      processBuffer: [],
+      processFlush: 0,
     };
   },
   computed: {
@@ -529,6 +633,12 @@ export default defineComponent({
       // Any operation that creates a checkpoint invalidates our redo stack (unless we start using some funny merge strategies..)
       // this.canRedo = false;
     },
+    isEmpty(obj) {
+      for (var x in obj) {
+        return false;
+      }
+      return true;
+    },
     undo() {
       this.worker.postMessage({
         question: "undo",
@@ -546,22 +656,36 @@ export default defineComponent({
       });
     },
     setStepSize() {
+      console.log("SETTING STEP SIZE");
       this.worker.postMessage({ question: "step", value: this.stepSize });
     },
     updateCanvas(w, h) {
       const matrix = toRaw(this.grid).image._data;
+      const arr = Uint8ClampedArray.from(
+        new Array(this.width * this.height * 4)
+      );
 
-      for (const i of range(0, this.size)._data) {
-        for (const j of range(0, this.size)._data) {
-          let index = matrix[this.my + i - floor(this.size / 2)];
-          if (index) {
-            index = index[this.mx + j - floor(this.size / 2)];
-          }
-          if (index) {
-            index[0] = 255;
-          }
-        }
+      // TODO: loop for full marker?
+      arr[4 * this.mx + 4 * this.my * w] = 255;
+      arr[4 * this.mx + 4 * this.my * w + 3] = 255;
+
+      for (let p of this.paintBuffer) {
+        arr[4 * p[1] + 4 * p[0] * w] = 255;
+        arr[4 * p[1] + 4 * p[0] * w + 1] = 255;
+
+        arr[4 * p[1] + 4 * p[0] * w + 3] = 128;
       }
+
+      for (let p of this.processBuffer) {
+        arr[4 * p[1] + 4 * p[0] * w + 1] =
+          100 + (155 * (1 + sin(this.time / 5))) / 2;
+        arr[4 * p[1] + 4 * p[0] * w + 2] = 255;
+
+        arr[4 * p[1] + 4 * p[0] * w + 3] = 128;
+      }
+
+      const highlightImg = new ImageData(arr, w, h);
+      this.highlightContext.putImageData(highlightImg, 0, 0);
 
       const img = this.debug
         ? new ImageData(
@@ -599,6 +723,27 @@ export default defineComponent({
         question: "onestep",
         value: 8 * this.stepSize,
       });
+    },
+    markForPaint() {
+      const paintMat = zeros(this.width, this.height);
+      for (
+        let i = Math.floor(this.mx - this.size / 2) + 1;
+        i < Math.floor(this.mx + this.size / 2) + 1;
+        i++
+      ) {
+        for (
+          let j = Math.floor(this.my - this.size / 2) + 1;
+          j < Math.floor(this.my + this.size / 2) + 1;
+          j++
+        ) {
+          if (i >= 0 && i < this.width && j >= 0 && j < this.height) {
+            if (!paintMat._data[i][j]) {
+              this.paintBuffer.push([j, i]);
+              paintMat._data[i][j] = true;
+            }
+          }
+        }
+      }
     },
     selectTileset(path) {
       for (const c in toRaw(this.importedTilesets)) {
@@ -638,13 +783,13 @@ export default defineComponent({
       // dagNodes = [];
       this.tiles = [];
       const nodeArray = [];
+
       for (const n in nodes) {
         invertedIndex[n] = i;
         nodeArray.push(nodes[n]);
         const node = nodes[n];
-        if (node.paintable) {
-          this.tiles.push({ slot: n, color: node.color, value: i });
-        }
+        this.tiles.push({ slot: n, color: node.color, value: i });
+
         // dagNodes.push(dagNode);
 
         i++;
@@ -652,7 +797,7 @@ export default defineComponent({
 
       // Build tile tree
       const treeNodeArray = [];
-      console.log(treeNodeArray);
+      console.log("exp", this.expanded);
 
       for (const n in nodes) {
         const nodeIndex = invertedIndex[n];
@@ -674,6 +819,10 @@ export default defineComponent({
       }
 
       this.tileTree = [treeNodeArray[invertedIndex["root"]]];
+      this.expanded.push(this.tileTree[0].key);
+      this.tileTree[0].children.forEach((c) => {
+        this.expanded.push(c.key);
+      });
 
       // console.log(nodeIndex);
 
@@ -712,8 +861,11 @@ export default defineComponent({
     },
   },
   mounted() {
+    this.leftDrawerOpen = false;
     var canvas = document.getElementById("wfc");
+    var highlightCanvas = document.getElementById("highlight");
     this.context = canvas.getContext("2d");
+    this.highlightContext = highlightCanvas.getContext("2d");
 
     this.worker = new Worker(
       new URL("../assets/js/worker.js", import.meta.url),
@@ -741,13 +893,27 @@ export default defineComponent({
     }
     console.log(this.importedTilesets);
 
+    // Feels smoother, more regular
+    window.setInterval(() => {
+      this.updateCanvas(this.width, this.height);
+    }, 10);
+
     this.worker.onmessage = ({ data: { grid, message } }) => {
       this.grid = grid;
       if (message === "doneUpdate") {
         this.canRedo = grid.canRedo;
         this.canUndo = grid.canUndo;
+
+        // lmao h@x0r
+        if (this.processBuffer) {
+          this.processFlush++;
+        }
+        if (this.processFlush > 20) {
+          this.processFlush = 0;
+          this.processBuffer = [];
+        }
       }
-      this.updateCanvas(this.width, this.height);
+      // this.updateCanvas(this.width, this.height);
       if (message === "doneAuto" && this.autoCollapse) {
         this.worker.postMessage({ question: "auto" });
       }
@@ -759,24 +925,39 @@ export default defineComponent({
       }
     };
 
+    window.setInterval(() => {
+      this.time++;
+    }, 10);
+
     let paintCanvas = (canvas, event) => {
-      this.worker.postMessage({
-        question: "manual",
-        value: [this.mx, this.my, this.tile_index, this.size],
-      });
+      // this.worker.postMessage({
+      //   question: "manual",
+      //   value: [this.mx, this.my, this.tile_index, this.size, this.tool],
+      // });
     };
-    canvas.addEventListener("mousemove", (e) => {
+
+    highlightCanvas.addEventListener("mousemove", (e) => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
+      const rect = highlightCanvas.getBoundingClientRect();
+      this.mxp = this.mx;
+      this.myp = this.my;
       this.mx = round(
-        ((this.width + 1) * (e.clientX - rect.left)) / canvas.offsetWidth - 1
+        (this.width * (e.clientX - rect.left)) / highlightCanvas.offsetWidth -
+          0.5
       );
       this.my = round(
-        ((this.height + 1) * (e.clientY - rect.top)) / canvas.offsetHeight - 1
+        (this.height * (e.clientY - rect.top)) / highlightCanvas.offsetHeight -
+          0.5
       );
 
-      if (this.leftMouseDown && this.tool == 0) {
-        paintCanvas(canvas, e);
+      if (this.mx !== this.mxp || this.my !== this.myp) {
+        if (this.leftMouseDown) {
+          this.markForPaint();
+        }
+
+        // if (this.leftMouseDown && [0, 2].includes(this.tool)) {
+        //   // paintCanvas(canvas, e);
+        // }
       }
     });
 
@@ -792,25 +973,35 @@ export default defineComponent({
     // canvas.addEventListener("mouseout", (e) => {
     //   this.leftMouseDown = false;
     // });
-    canvas.addEventListener("mousedown", (e) => {
+    highlightCanvas.addEventListener("mousedown", (e) => {
       e.preventDefault();
       if (e.button == 0) {
         this.leftMouseDown = true;
-        this.worker.postMessage({ question: "clear" });
-        this.checkpoint();
-        this.worker.postMessage({ question: "lock" });
+        this.markForPaint();
 
-        if (this.tool == 0) {
-          paintCanvas(canvas, e);
-        } else if (this.tool == 1) {
-          this.worker.postMessage({ question: "info", value: [] });
-        }
+        // this.worker.postMessage({ question: "clear" });
+        this.checkpoint();
+        // this.worker.postMessage({ question: "lock" });
+
+        // if ([0, 2].includes(this.tool)) {
+        //   paintCanvas(canvas, e);
+        // } else if (this.tool == 1) {
+        //   this.worker.postMessage({ question: "info", value: [] });
+        // }
       }
     });
     document.addEventListener("mouseup", (e) => {
       if (e.button == 0) {
         this.leftMouseDown = false;
-        this.worker.postMessage({ question: "unlock" });
+        if (this.paintBuffer.length > 0) {
+          this.worker.postMessage({
+            question: "paint",
+            value: [this.tile_index],
+            cells: flatten(toRaw(this.paintBuffer)),
+          });
+        }
+        this.processBuffer = this.paintBuffer;
+        this.paintBuffer = [];
       }
     });
     window.addEventListener("keydown", (e) => {
@@ -858,6 +1049,7 @@ export default defineComponent({
       if (e.key === "s") {
         this.oneStep();
       }
+
       for (const i of range(1, this.snapshotCount + 1)) {
         if (e.key === `${i.value}`) {
           this.setSnapshot(i.value - 1);
@@ -867,7 +1059,7 @@ export default defineComponent({
 
     // TOUCH SUPPORT
     // TODO: Extract common elements to methods, so mouse/touch can use the same interface
-    canvas.addEventListener("touchstart", (e) => {
+    highlightCanvas.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
         this.leftMouseDown = true;
         this.worker.postMessage({ question: "clear" });
@@ -882,27 +1074,27 @@ export default defineComponent({
       }
       return false;
     });
-    canvas.addEventListener("touchend", (e) => {
+    highlightCanvas.addEventListener("touchend", (e) => {
       this.leftMouseDown = false;
       this.worker.postMessage({ question: "unlock" });
     });
-    canvas.addEventListener("touchmove", (e) => {
+    highlightCanvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
       if (e.touches) {
         const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
+        const rect = highlightCanvas.getBoundingClientRect();
         this.mx = round(
           ((this.width + 1) * (touch.clientX - rect.left)) /
-            canvas.offsetWidth -
+            highlightCanvas.offsetWidth -
             1
         );
         this.my = round(
           ((this.height + 1) * (touch.clientY - rect.top)) /
-            canvas.offsetHeight -
+            highlightCanvas.offsetHeight -
             1
         );
 
-        if (this.leftMouseDown && this.tool == 0) {
+        if (this.leftMouseDown && [0, 2].includes(this.tool)) {
           paintCanvas(canvas, e);
         }
       }
@@ -921,6 +1113,8 @@ export default defineComponent({
         new URL("../assets/default.png", import.meta.url).href
       );
     }
+
+    this.setStepSize();
 
     console.log("MOUNTED");
   },

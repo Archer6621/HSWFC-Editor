@@ -1522,7 +1522,7 @@ ee-first@1.1.1:
 
 "eigen@https://github.com/Archer6621/eigen-js":
   version "0.2.2"
-  resolved "https://github.com/Archer6621/eigen-js#02c5faa738af884577256e96f6fed30083d36b47"
+  resolved "https://github.com/Archer6621/eigen-js#a646f386231e59a53b9c8bef90d58279e20e1d7c"
   dependencies:
     "@types/hashmap" "^2.3.1"
     hashmap "^2.4.0"

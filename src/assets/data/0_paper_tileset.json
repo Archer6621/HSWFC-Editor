@@ -4,7 +4,7 @@
       "paintable": true,
       "generate": true,
       "color": [0, 0, 0],
-      "children": { "water": 1, "land": 1, "village": 1 },
+      "children": { "water": 0.1, "land": 1, "village": 1 },
       "adjacencies": {
         "U": ["root"],
         "D": ["root"],
@@ -88,7 +88,7 @@
       "paintable": true,
       "generate": true,
       "color": [190, 0, 190],
-      "children": { "water": 1, "sand": 1, "grass": 1, "house": 10 },
+      "children": { "water": 1, "grass": 1, "house": 10 },
       "adjacencies": {
         "U": ["village"],
         "D": ["village"],

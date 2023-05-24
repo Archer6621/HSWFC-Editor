@@ -1,11 +1,9 @@
 import { Grid } from "./HSWFC.js";
 
 let grid;
-const batchSize = 256;
 let autoStepSize = 1;
-let lock = false;
 
-self.onmessage = ({ data: { question, value } }) => {
+self.onmessage = ({ data: { question, value, cells } }) => {
   if (question === "init") {
     const width = value[0];
     const tileset = value[1];
@@ -21,9 +19,7 @@ self.onmessage = ({ data: { question, value } }) => {
       });
     });
   } else if (question === "update") {
-    for (let i = 0; i < batchSize; i++) {
-      grid.update();
-    }
+    grid.update();
     self.postMessage({
       grid: {
         ...grid.getState(),
@@ -32,35 +28,22 @@ self.onmessage = ({ data: { question, value } }) => {
       },
       message: "doneUpdate",
     });
-  } else if (question === "manual") {
-    const x = value[1];
-    const y = value[0];
-    const tileIndex = value[2];
-    const markerSize = value[3];
+  } else if (question === "paint") {
+    const tileIndex = value[0];
+    const coordinates = cells.flatMap((_, i, a) =>
+      i % 2 ? [] : [a.slice(i, i + 2)]
+    );
+    grid.paintEnqueue(coordinates, tileIndex);
 
-    for (
-      let i = Math.floor(x - markerSize / 2) + 1;
-      i < Math.floor(x + markerSize / 2) + 1;
-      i++
-    ) {
-      for (
-        let j = Math.floor(y - markerSize / 2) + 1;
-        j < Math.floor(y + markerSize / 2) + 1;
-        j++
-      ) {
-        if (i >= 0 && i < grid.gridSize && j >= 0 && j < grid.gridSize) {
-          grid.manualCollapse(i, j, tileIndex);
-        }
-      }
-    }
+    // grid.manualCollapse(x, y, markerSize, tileIndex);
   } else if (question === "auto") {
-    if (!lock) {
-      grid.autoCollapse(autoStepSize);
+    if (!grid.lock) {
+      grid.autoEnqueue(autoStepSize);
     }
     self.postMessage({ grid: grid.getState(), message: "doneAuto" });
   } else if (question === "clear") {
     // console.log("Clearing");
-    grid.clearQueue();
+    // grid.clearQueue();
   } else if (question === "reset") {
     grid.initialize();
   } else if (question === "undo") {
@@ -73,16 +56,16 @@ self.onmessage = ({ data: { question, value } }) => {
     autoStepSize = value;
   } else if (question === "onestep") {
     if (value) {
-      grid.autoCollapse(value);
+      grid.autoEnqueue(value);
     } else {
-      grid.autoCollapse(autoStepSize);
+      grid.autoEnqueue(autoStepSize * autoStepSize);
     }
     grid.update();
     self.postMessage({ grid: grid.getState(), message: "doneStep" });
   } else if (question === "lock") {
-    lock = true;
+    grid.lock = true;
   } else if (question === "unlock") {
-    lock = false;
+    grid.lock = false;
   } else if (question === "snapshot") {
     grid.snapshot(value);
   } else if (question === "load snapshot") {
