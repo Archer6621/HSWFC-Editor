@@ -839,9 +839,10 @@ export default defineComponent({
 
         tile.img = new Image();
         tile.img.src = new URL(
-          `../../${json.name}/${n}.png`,
+          `../assets/data/${json.name}/${n}.png`,
           import.meta.url
         ).href;
+
         console.log(tile.img.src);
         // Kinda redundant to set it for every tile but oh well
         tile.img.onload = () => {
