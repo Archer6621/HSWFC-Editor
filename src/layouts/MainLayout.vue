@@ -97,7 +97,7 @@
                     style="margin-right: 8px"
                     width="24px"
                     height="24px"
-                    :src="this.tiles[prop.node.key].img.src"
+                    :src="this.tiles[prop.node.key]?.img?.src"
                   />
                   <div class="text-weight-bold">
                     {{ prop.node.label }}
