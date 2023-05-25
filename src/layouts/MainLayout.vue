@@ -97,7 +97,7 @@
                     style="margin-right: 8px"
                     width="24px"
                     height="24px"
-                    :src="`../../${tilesetData?.name}/${prop.node.label}.png`"
+                    :src="this.tiles[prop.node.key].img.src"
                   />
                   <div class="text-weight-bold">
                     {{ prop.node.label }}
