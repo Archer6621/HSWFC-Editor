@@ -391,7 +391,7 @@ export class Grid {
     );
 
     // TODO: Seems U/D and R/L are flipped
-    this.eigenOffsets = { D: 2, U: 0, L: 3, R: 1 };
+    this.eigenOffsets = { D: 0, U: 2, L: 1, R: 3 };
 
     this.colorMap = new Array(this.gridChoices);
     this.allowed = new Array(this.gridChoices);

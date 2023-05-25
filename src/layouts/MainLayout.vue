@@ -37,7 +37,17 @@
       <!-- <router-view /> -->
       <span style="display: flex">
         <div class="canvasHolder">
-          <canvas id="wfc" :width="this.width" :height="this.height"></canvas>
+          <canvas
+            id="wfc"
+            :width="this.tileDim * this.width"
+            :height="this.tileDim * this.height"
+          ></canvas>
+          <canvas
+            id="entropy"
+            :width="this.width"
+            :height="this.height"
+            style="opacity: 0.75"
+          ></canvas>
           <canvas
             id="highlight"
             :width="this.width"
@@ -78,11 +88,17 @@
                     selectedtree: prop.tree.selected === prop.node.key,
                   }"
                 >
-                  <q-icon
+                  <!-- <q-icon
                     name="square"
                     left
                     :style="`color: rgb(${prop.node.color[0]}, ${prop.node.color[1]}, ${prop.node.color[2]})`"
-                  ></q-icon>
+                  ></q-icon> -->
+                  <q-img
+                    style="margin-right: 8px"
+                    width="24px"
+                    height="24px"
+                    :src="`../../${tilesetData?.name}/${prop.node.label}.png`"
+                  />
                   <div class="text-weight-bold">
                     {{ prop.node.label }}
                     <!-- {{  ? ">" : "" }} -->
@@ -548,8 +564,8 @@ export default defineComponent({
   data() {
     return {
       time: 0,
-      width: 64,
-      height: 64,
+      width: 32,
+      height: 32,
       mx: 0,
       my: 0,
       mxp: 0,
@@ -560,6 +576,7 @@ export default defineComponent({
       grid: undefined,
       context: undefined,
       highlightContext: undefined,
+      entropyContext: undefined,
       leftMouseDown: false,
       rightMouseDown: false,
       autoCollapse: false,
@@ -582,6 +599,8 @@ export default defineComponent({
       paintBuffer: [],
       processBuffer: [],
       processFlush: 0,
+      tileDim: 0,
+      tilesetData: undefined,
     };
   },
   computed: {
@@ -660,7 +679,6 @@ export default defineComponent({
       this.worker.postMessage({ question: "step", value: this.stepSize });
     },
     updateCanvas(w, h) {
-      const matrix = toRaw(this.grid).image._data;
       const arr = Uint8ClampedArray.from(
         new Array(this.width * this.height * 4)
       );
@@ -687,16 +705,46 @@ export default defineComponent({
       const highlightImg = new ImageData(arr, w, h);
       this.highlightContext.putImageData(highlightImg, 0, 0);
 
-      const img = this.debug
-        ? new ImageData(
-            Uint8ClampedArray.from(
-              flatten(toRaw(this.grid).entropyImage._data)
-            ),
-            w,
-            h
-          )
-        : new ImageData(Uint8ClampedArray.from(flatten(matrix)), w, h);
-      this.context.putImageData(img, 0, 0);
+      const matrix = this.grid?.chosen._data;
+      // for (let i = 0; i < this.width; i++) {
+      //   for (let j = 0; j < this.width; j++) {
+      //     this.context.drawImage(this.tile, 7 * i, 7 * j);
+      //   }
+      // }
+
+      if (this.debug) {
+        const entrImg = new ImageData(
+          Uint8ClampedArray.from(flatten(toRaw(this.grid).entropyImage._data)),
+          w,
+          h
+        );
+        this.entropyContext.putImageData(entrImg, 0, 0);
+      } else {
+        this.entropyContext.clearRect(0, 0, this.width, this.height);
+      }
+
+      // Probably do entropy via yet another overlay
+      // const img = this.debug
+      //   ? new ImageData(
+      //       Uint8ClampedArray.from(
+      //         flatten(toRaw(this.grid).entropyImage._data)
+      //       ),
+      //       w,
+      //       h
+      //     )
+      //   : new ImageData(Uint8ClampedArray.from(flatten(matrix)), w, h);
+      // this.context.putImageData(img, 0, 0);
+
+      // this.context.putImageData(img, 0, 0);
+      for (let i = 0; i < this.width; i++) {
+        for (let j = 0; j < this.height; j++) {
+          this.context.drawImage(
+            this.tiles[matrix[j][i]].img,
+            this.tileDim * i,
+            this.tileDim * j
+          );
+        }
+      }
     },
     oneStep() {
       this.checkpoint();
@@ -746,24 +794,22 @@ export default defineComponent({
       }
     },
     selectTileset(path) {
-      for (const c in toRaw(this.importedTilesets)) {
-        console.log(c);
-      }
-
       console.log(
         toRaw(this.importedTilesets),
         path,
         toRaw(this.importedTilesets)[path]
       );
-      console.log(
-        toRaw(this.importedTilesets)["../assets/data/1_dev_tileset.json"]
-      );
+      // console.log(
+      //   toRaw(this.importedTilesets)["../assets/data/1_dev_tileset.json"]
+      // );
 
       const json = toRaw(toRaw(this.importedTilesets)[path]);
+      this.tilesetData = json;
+
+      const tiles = {};
 
       const nodes = json.nodes;
       const nodeCount = Object.keys(nodes).length;
-      let i = 0;
       const invertedIndex = {};
       const adjacencies = {
         U: zeros(nodeCount, nodeCount),
@@ -783,12 +829,26 @@ export default defineComponent({
       // dagNodes = [];
       this.tiles = [];
       const nodeArray = [];
+      let i = 0;
 
       for (const n in nodes) {
         invertedIndex[n] = i;
         nodeArray.push(nodes[n]);
         const node = nodes[n];
-        this.tiles.push({ slot: n, color: node.color, value: i });
+        const tile = { slot: n, color: node.color, value: i };
+
+        tile.img = new Image();
+        tile.img.src = new URL(
+          `../../${json.name}/${n}.png`,
+          import.meta.url
+        ).href;
+        // Kinda redundant to set it for every tile but oh well
+        tile.img.onload = () => {
+          this.tileDim = tile.img.width;
+        };
+        this.tiles.push(tile);
+
+        //
 
         // dagNodes.push(dagNode);
 
@@ -864,8 +924,10 @@ export default defineComponent({
     this.leftDrawerOpen = false;
     var canvas = document.getElementById("wfc");
     var highlightCanvas = document.getElementById("highlight");
+    var entropyCanvas = document.getElementById("entropy");
     this.context = canvas.getContext("2d");
     this.highlightContext = highlightCanvas.getContext("2d");
+    this.entropyContext = entropyCanvas.getContext("2d");
 
     this.worker = new Worker(
       new URL("../assets/js/worker.js", import.meta.url),
@@ -876,9 +938,10 @@ export default defineComponent({
     let i = 0;
     for (const filename in tilesets) {
       tilesets[filename]().then((module) => {
+        module.default.name = filename.split("/").pop().split(".")[0];
         this.importedTilesets.push(module.default);
         this.tilesets.push({
-          label: filename.split("/").pop().split(".")[0],
+          label: module.default.name,
           value: i,
         });
         this.tilesets = this.tilesets.sort((a, b) =>
@@ -892,11 +955,6 @@ export default defineComponent({
       });
     }
     console.log(this.importedTilesets);
-
-    // Feels smoother, more regular
-    window.setInterval(() => {
-      this.updateCanvas(this.width, this.height);
-    }, 10);
 
     this.worker.onmessage = ({ data: { grid, message } }) => {
       this.grid = grid;
@@ -922,6 +980,10 @@ export default defineComponent({
         window.setInterval(() => {
           this.worker.postMessage({ question: "update" });
         }, 10);
+        // Feels smoother, more regular
+        window.setInterval(() => {
+          this.updateCanvas(this.width, this.height);
+        }, 10);
       }
     };
 
@@ -929,12 +991,12 @@ export default defineComponent({
       this.time++;
     }, 10);
 
-    let paintCanvas = (canvas, event) => {
-      // this.worker.postMessage({
-      //   question: "manual",
-      //   value: [this.mx, this.my, this.tile_index, this.size, this.tool],
-      // });
-    };
+    // let paintCanvas = (canvas, event) => {
+    //   // this.worker.postMessage({
+    //   //   question: "manual",
+    //   //   value: [this.mx, this.my, this.tile_index, this.size, this.tool],
+    //   // });
+    // };
 
     highlightCanvas.addEventListener("mousemove", (e) => {
       e.preventDefault();
