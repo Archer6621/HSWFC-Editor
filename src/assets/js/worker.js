@@ -20,12 +20,13 @@ self.onmessage = ({ data: { question, value, cells } }) => {
       });
     });
   } else if (question === "update") {
-    grid.update();
+    const modifiedCells = grid.update();
     self.postMessage({
       grid: {
         ...grid.getState(),
         canRedo: grid.redoStack.length > 0,
         canUndo: grid.undoStack.length > 0,
+        modifiedCells: modifiedCells,
       },
       message: "doneUpdate",
     });
@@ -46,11 +47,24 @@ self.onmessage = ({ data: { question, value, cells } }) => {
     // console.log("Clearing");
     // grid.clearQueue();
   } else if (question === "reset") {
-    grid.initialize();
+    grid.initialize().then(() => {
+      self.postMessage({
+        grid: grid.getState(),
+        message: "redraw",
+      });
+    });
   } else if (question === "undo") {
     grid.undo();
+    self.postMessage({
+      grid: grid.getState(),
+      message: "redraw",
+    });
   } else if (question === "redo") {
     grid.redo();
+    self.postMessage({
+      grid: grid.getState(),
+      message: "redraw",
+    });
   } else if (question === "checkpoint") {
     grid.checkpoint();
   } else if (question === "step") {

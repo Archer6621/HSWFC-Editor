@@ -1,158 +1,202 @@
 <template>
-  <q-layout view="LHh Lpr lFf">
-    <q-header elevated>
-      <q-toolbar>
-        <q-btn
-          flat
-          dense
-          round
-          icon="menu"
-          aria-label="Menu"
-          @click="toggleLeftDrawer"
-        />
-        <q-toolbar-title> HSWFC Editor </q-toolbar-title>
-
-        <div>Quasar v{{ $q.version }}</div>
-      </q-toolbar>
-    </q-header>
-
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
-      <div class="q-pa-md">
-        <b class="text-uppercase">Hierarchical Tilesets</b>
-        <q-option-group
-          v-model="chosenTileset"
-          :options="tilesets"
-          color="primary"
-          @update:model-value="
-            (val, _) => {
-              this.selectTileset(val);
-              this.resetFocus();
-            }
-          "
-        />
+  <div class="mainGrid">
+    <div class="tileTreeArea" style="overflow-x: auto">
+      <div class="q-mx-md q-mt-sm" style="flex: 0 1 auto; max-height: 2em">
+        <b
+          class="text-uppercase text-h6 text-weight-bold"
+          title="The tiles that
+          can be painted with"
+        >
+          Tiles</b
+        >
       </div>
-    </q-drawer>
 
-    <q-page-container>
-      <!-- <router-view /> -->
-      <span style="display: flex">
-        <div
-          class="canvasHolder"
-          :style="`min-width: ${this.aspect(true) * 90}vh; min-height: ${
-            this.aspect(false) * 90
-          }vh; width: ${this.aspect(true) * 90}vh; height: ${
-            this.aspect(false) * 90
-          }vh`"
+      <q-separator style="height: 1px; width: 100%" vertical inset />
+      <div class="q-pa-md q-gutter-sm" style="overflow-y: auto; flex: 0 1 auto">
+        <q-tree
+          :nodes="tileTree"
+          default-expand-all
+          v-model:selected="tile_index"
+          :duration="50"
+          v-model:expanded="expanded"
+          node-key="key"
+          @click="resetFocus"
+          @update:expanded="resetFocus"
         >
-          <canvas
-            id="wfc"
-            :width="this.tileDim * this.width"
-            :height="this.tileDim * this.height"
-          ></canvas>
-          <canvas
-            id="entropy"
-            :width="this.width"
-            :height="this.height"
-            style="opacity: 0.75"
-          ></canvas>
-          <canvas
-            id="highlight"
-            :width="this.width"
-            :height="this.height"
-          ></canvas>
-        </div>
-
-        <div
-          style="
-            display: flex;
-            padding: 16px;
-
-            width: 300px;
-            flex-direction: column;
-          "
-        >
-          <!-- <b class="text-uppercase">State</b> -->
-
-          <!-- <q-separator style="height: 1px; width: 100%" vertical inset /> -->
-          <b class="text-uppercase" title="The tiles that can be painted with"
-            >Tiles</b
-          >
-          <div class="q-pa-md q-gutter-sm">
-            <q-tree
-              :nodes="tileTree"
-              default-expand-all
-              v-model:selected="tile_index"
-              :duration="50"
-              v-model:expanded="expanded"
-              node-key="key"
-              @click="resetFocus"
-              @update:expanded="resetFocus"
+          <template v-slot:default-header="prop">
+            <div
+              class="row items-center"
+              v-bind:class="{
+                selectedtree: prop.tree.selected === prop.node.key,
+              }"
             >
-              <template v-slot:default-header="prop">
-                <div
-                  class="row items-center"
-                  v-bind:class="{
-                    selectedtree: prop.tree.selected === prop.node.key,
-                  }"
-                >
-                  <!-- <q-icon
+              <!-- <q-icon
                     name="square"
                     left
                     :style="`color: rgb(${prop.node.color[0]}, ${prop.node.color[1]}, ${prop.node.color[2]})`"
                   ></q-icon> -->
-                  <q-img
-                    style="margin-right: 8px"
-                    width="24px"
-                    height="24px"
-                    :src="this.tiles[prop.node.key]?.img?.src"
-                  />
-                  <div class="text-weight-bold">
-                    {{ prop.node.label }}
-                    <!-- {{  ? ">" : "" }} -->
-                    <!-- {{ print(prop) }} -->
-                    <!-- {{ prop }} -->
-                  </div>
-                </div>
-              </template>
-            </q-tree>
-          </div>
-
-          <!-- <q-btn-toggle
-            style="flex-direction: column; text-align: left"
-            v-model="tile_index"
-            toggle-color="primary"
-            color="white"
-            @click="resetFocus"
-            dense
-            unelevated
-            text-color="black"
-            :options="this.tiles"
-          >
-            <template v-for="tile in this.tiles" v-slot:[tile.slot] :key="tile">
-              <q-icon
-                name="square"
-                left
-                :style="`color: rgb(${tile.color[0]}, ${tile.color[1]}, ${tile.color[2]})`"
-              ></q-icon>
-              <div>
-                {{ tile.slot }}
+              <q-img
+                style="margin-right: 8px"
+                width="24px"
+                height="24px"
+                :src="this.tiles[prop.node.key]?.img?.src"
+              />
+              <div class="text-weight-bold">
+                {{ prop.node.label }}
+                <!-- {{  ? ">" : "" }} -->
+                <!-- {{ print(prop) }} -->
+                <!-- {{ prop }} -->
               </div>
-              <q-space />
-            </template>
-          </q-btn-toggle> -->
-          <q-separator style="height: 1px; width: 100%" vertical inset />
-        </div>
+            </div>
+          </template>
+        </q-tree>
+      </div>
+    </div>
 
-        <div
-          style="
-            display: flex;
-            padding: 16px;
+    <div class="canvasArea">
+      <div
+        class="canvasHolder"
+        :style="`aspect-ratio: ${this.aspect(true)}/ ${this.aspect()};`"
+      >
+        <canvas
+          id="wfc"
+          :width="this.tileDim * this.width"
+          :height="this.tileDim * this.height"
+        ></canvas>
+        <canvas
+          id="entropy"
+          :width="this.width"
+          :height="this.height"
+          style="opacity: 0.75"
+        ></canvas>
+        <canvas
+          id="highlight"
+          :width="this.width"
+          :height="this.height"
+        ></canvas>
+      </div>
+    </div>
 
-            width: 300px;
-            flex-direction: column;
-          "
-        >
-          <!-- <b class="text-uppercase">Tool</b>
+    <div class="settingsArea">
+      <div class="q-mx-md q-mt-sm" style="flex: 0 1 auto; max-height: 2em">
+        <b class="text-uppercase text-h6 text-weight-bold"> Settings</b>
+      </div>
+
+      <q-separator style="height: 1px; width: 100%" vertical inset />
+
+      <div
+        class="q-pa-md q-gutter-sm"
+        style="overflow-y: auto; overflow-x: hidden; flex: 0 1 auto"
+      >
+        <q-item>
+          <q-checkbox
+            title="Shows the entropy of the grid overlaid over the tiles"
+            size="md"
+            v-model="debug"
+            val="md"
+            label="Show Entropy"
+            class="row"
+            @click="resetFocus"
+          />
+        </q-item>
+
+        <q-item>
+          <span class="row">
+            <q-input
+              v-model.number="this.width"
+              style="min-width: 48px"
+              type="number"
+              filled
+              label="width"
+              class="q-mr-xs q-my-xs col"
+              @update:model-value="
+                () => {
+                  initWorker();
+                }
+              "
+              @click="resetFocus"
+            />
+            <q-input
+              v-model.number="this.height"
+              type="number"
+              style="min-width: 48px"
+              filled
+              label="height"
+              class="q-mr-xs q-my-xs col"
+              @update:model-value="
+                () => {
+                  initWorker();
+                }
+              "
+              @click="resetFocus"
+            />
+          </span>
+        </q-item>
+
+        <q-item>
+          <q-item-section>
+            <q-item-label class="q-py-sm">
+              <b class="text-uppercase" title="Size of the paint brush"
+                >Brush Size</b
+              >
+            </q-item-label>
+            <q-btn-toggle
+              title="Size of the paint brush"
+              v-model="size"
+              spread
+              class="buttonToggleMW"
+              style="max-width: 100%"
+              size="md"
+              toggle-color="primary"
+              :options="[
+                { icon: 'img:dot-xs.svg', value: 1 },
+                { icon: 'img:dot-s.svg', value: 3 },
+                { icon: 'img:dot-m.svg', value: 5 },
+                { icon: 'img:dot-l.svg', value: 9 },
+                { icon: 'img:dot.svg', value: 15 },
+              ]"
+              @click="resetFocus"
+              @update:model-value="resetFocus"
+            />
+          </q-item-section>
+        </q-item>
+        <q-item>
+          <q-item-section>
+            <q-item-label class="q-py-sm">
+              <b
+                class="text-uppercase"
+                title="Speed at which the WFC solver runs"
+                >Generation Speed</b
+              >
+            </q-item-label>
+            <q-btn-toggle
+              title="Speed at which the WFC solver runs"
+              spread
+              v-model="stepSize"
+              style="max-width: 100%"
+              class="buttonToggleMW"
+              toggle-color="primary"
+              :options="[
+                { icon: 'fa-solid fa-person-walking', value: 1 },
+                { icon: 'fa-solid fa-person-running', value: 5 },
+                { icon: 'fa-solid fa-person-biking', value: 15 },
+                { icon: 'fa-solid fa-truck-fast', value: 50 },
+              ]"
+              @click="resetFocus"
+              @update:model-value="
+                () => {
+                  setStepSize();
+                  resetFocus();
+                }
+              "
+            />
+          </q-item-section>
+        </q-item>
+      </div>
+    </div>
+
+    <div class="controlsArea row q-py-md">
+      <!-- <b class="text-uppercase">Tool</b>
           <q-btn-toggle
             ref="layout"
             tabindex="-1"
@@ -171,62 +215,135 @@
           />
           <q-separator style="height: 1px; width: 100%" vertical inset /> -->
 
-          <b class="text-uppercase">Settings</b>
-          <q-checkbox
-            title="Shows the entropy of the grid instead of the tiles"
-            size="md"
-            v-model="debug"
-            val="md"
-            label="Show Entropy"
-            @click="resetFocus"
-          />
-          <q-input
-            v-model.number="this.width"
-            type="number"
-            filled
-            label="width"
-            @update:model-value="
-              () => {
-                initWorker();
-                resetFocus();
+      <!-- <b class="text-uppercase">Controls</b> -->
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+        <q-btn-toggle
+          title="Pauses or resumes the automatic generator, based on the configured generation speed [Space]"
+          tabindex="-1"
+          v-model="autoCollapse"
+          toggle-color="primary"
+          color="white"
+          style="flex-grow: 1"
+          size="md"
+          spread
+          stretch
+          @click="resetFocus"
+          text-color="primary"
+          @update:model-value="
+            (val) => {
+              if (val) {
+                this.worker.postMessage({ question: 'auto' });
               }
-            "
-            @click="resetFocus"
-          />
-          <q-input
-            v-model.number="this.height"
-            type="number"
-            filled
-            label="height"
-            @update:model-value="
-              () => {
-                initWorker();
-                resetFocus();
-              }
-            "
-            @click="resetFocus"
-          />
-          <q-separator style="height: 1px; width: 100%" vertical inset />
+            }
+          "
+          :options="[
+            { icon: 'pause', value: false },
+            { icon: 'play_arrow', value: true },
+          ]"
+        />
+      </span>
 
-          <b class="text-uppercase">Controls</b>
-          <div class="q-gutter-sm col-auto no-wrap">
-            <span class="row">
-              <q-btn
-                title="Solve for one step, which is sized according to the set solve speed below"
-                color="white"
-                class="col"
-                text-color="black"
-                icon="skip_next"
-                :ripple="false"
-                @click="
-                  () => {
-                    oneStep();
-                    resetFocus();
-                  }
-                "
-              />
-            </span>
-            <!-- <span class="row">
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+        <q-btn
+          title="Solve for one step, which is sized according to the set solve speed [Right Arrow]"
+          color="white"
+          style="flex-grow: 1"
+          text-color="black"
+          size="md"
+          icon="skip_next"
+          :ripple="false"
+          @click="
+            () => {
+              oneStep();
+              resetFocus();
+            }
+          "
+        />
+      </span>
+
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+        <q-btn
+          title="Undo [CTRL+Z, Left Arrow]"
+          color="white"
+          text-color="black"
+          style="flex-grow: 1"
+          icon="undo"
+          size="md"
+          :disable="!canUndo"
+          @click="
+            () => {
+              undo();
+              resetFocus();
+            }
+          "
+        />
+        <q-btn
+          title="Redo [CTRL+Y]"
+          color="white"
+          text-color="black"
+          style="flex-grow: 1"
+          icon="redo"
+          size="md"
+          :disable="!canRedo"
+          @click="
+            () => {
+              redo();
+              resetFocus();
+            }
+          "
+        />
+      </span>
+
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+        <q-btn
+          title="Reset the grid completely [R]"
+          color="white"
+          class="q-mx-xs"
+          text-color="black"
+          size="md"
+          style="flex-grow: 1"
+          icon="delete"
+          @click="
+            () => {
+              reset();
+              resetFocus();
+            }
+          "
+        />
+        <q-btn
+          title="Regenerate areas that came from the currently selected tile"
+          color="white"
+          class="q-mx-xs"
+          text-color="black"
+          size="md"
+          icon="rebase_edit"
+          style="flex-grow: 1"
+          @click="
+            () => {
+              collapsePathRegen();
+              resetFocus();
+            }
+          "
+        />
+        <q-btn
+          title="Download an image of the canvas"
+          color="white"
+          class="q-mx-xs"
+          text-color="black"
+          size="md"
+          style="flex-grow: 1"
+          icon="download"
+          @click="
+            () => {
+              saveImage();
+              resetFocus();
+            }
+          "
+        />
+      </span>
+
+      <!-- <div class="q-gutter-sm col-auto no-wrap"> -->
+      <!-- <span class="row">
               <q-btn
 
                 color="white"
@@ -242,321 +359,28 @@
                 "
               />
             </span> -->
-            <span class="row">
-              <q-btn
-                title="Undo"
-                color="white"
-                text-color="black"
-                class="col"
-                icon="undo"
-                :disable="!canUndo"
-                @click="
-                  () => {
-                    undo();
-                    resetFocus();
-                  }
-                "
-              />
-              <q-btn
-                title="Redo"
-                color="white"
-                text-color="black"
-                class="col"
-                icon="redo"
-                :disable="!canRedo"
-                @click="
-                  () => {
-                    redo();
-                    resetFocus();
-                  }
-                "
-              />
-            </span>
-            <span class="row">
-              <q-btn
-                title="Reset the grid completely"
-                color="white"
-                class="col"
-                text-color="black"
-                label="Reset"
-                @click="
-                  () => {
-                    reset();
-                    resetFocus();
-                  }
-                "
-              />
-            </span>
-            <span class="row">
-              <q-btn
-                title="Reset the grid completely"
-                color="white"
-                class="col"
-                text-color="black"
-                label="Regenerate"
-                @click="
-                  () => {
-                    collapsePathRegen();
-                    resetFocus();
-                  }
-                "
-              />
-            </span>
-          </div>
-          <q-separator style="height: 1px; width: 100%" vertical inset />
+      <!-- </div> -->
+    </div>
 
-          <b class="text-uppercase" title="Size of the paint brush"
-            >Brush Size</b
-          >
+    <div class="toolbarArea">
+      <q-toolbar style="min-height: 100%" class="bg-primary text-white">
+        <!-- <q-btn flat round dense>
+        <q-icon name="menu" />
+      </q-btn> -->
+        <q-icon name="bolt" size="3vh" />
+        <q-toolbar-title style="font-size: 3vh"> HSWFC Editor </q-toolbar-title>
+        <!-- <q-btn flat round dense>
+        <q-icon name="more_vert" />
+      </q-btn> -->
+      </q-toolbar>
+    </div>
 
-          <q-item>
-            <q-btn-toggle
-              title="Size of the paint brush"
-              v-model="size"
-              toggle-color="primary"
-              :options="[
-                {
-                  icon: 'img:dot-xs.svg',
-                  value: 1,
-                },
-                { icon: 'img:dot-s.svg', value: 3 },
-
-                { icon: 'img:dot-m.svg', value: 5 },
-                { icon: 'img:dot-l.svg', value: 9 },
-                { icon: 'img:dot.svg', value: 15 },
-              ]"
-              @click="resetFocus"
-              @update:model-value="resetFocus"
-            />
-            <!-- <q-btn
-              color="white"
-              text-color="black"
-              icon="remove"
-              @click="this.size++"
-            />
-            <q-separator vertical />
-            <q-space />
-            {{ this.size }}
-            <q-space />
-
-            <q-separator vertical />
-            <q-btn
-              color="white"
-              text-color="black"
-              icon="add"
-              @click="this.size--"
-            />
-            <q-space /> -->
-
-            <!-- <q-item-section avatar>
-              <b>{{ this.size }}</b>
-            </q-item-section>
-            <q-item-section>
-              <q-slider
-                v-model="size"
-                :min="1"
-                :max="9"
-                :step="2"
-                snap
-                @change="resetFocus"
-                color="primary"
-              />
-            </q-item-section> -->
-          </q-item>
-
-          <q-separator style="height: 1px; width: 100%" vertical inset />
-
-          <b class="text-uppercase" title="Speed at which the WFC solver runs"
-            >Generation Speed</b
-          >
-
-          <q-item>
-            <q-btn-toggle
-              title="Speed at which the WFC solver runs"
-              v-model="stepSize"
-              toggle-color="primary"
-              :options="[
-                { icon: 'fa-solid fa-person-walking', value: 1 },
-                { icon: 'fa-solid fa-person-running', value: 5 },
-                { icon: 'fa-solid fa-person-biking', value: 15 },
-                { icon: 'fa-solid fa-truck-fast', value: 50 },
-              ]"
-              @click="resetFocus"
-              @update:model-value="
-                () => {
-                  setStepSize();
-                  resetFocus();
-                }
-              "
-            />
-            <!-- <q-item-section avatar>
-              <b>{{ this.stepSize }}</b>
-            </q-item-section>
-            <q-item-section>
-              <q-slider
-                v-model="stepSize"
-                :min="1"
-                :max="128"
-                :step="1"
-                snap
-                @click="resetFocus"
-                @change="
-                  () => {
-                    setStepSize();
-                    resetFocus();
-                  }
-                "
-                color="primary"
-              />
-            </q-item-section> -->
-          </q-item>
-
-          <q-separator style="height: 1px; width: 100%" vertical inset />
-        </div>
-      </span>
-      <span style="display: flex">
-        <!-- <q-card
-          v-for="(url, index) in this.imageUrl"
-          :key="index"
-          class="q-ma-sm"
-          style="width: 140px"
-        >
-          <q-img
-            @click="
-              {
-                imagePopup[index] = true;
-              }
-            "
-            :src="url"
-          >
-          </q-img>
-
-          <q-dialog v-model="imagePopup[index]">
-            <q-card>
-              <q-card-section class="row items-center q-pb-none">
-                <q-space />
-                <q-btn icon="close" flat round dense v-close-popup />
-              </q-card-section>
-
-              <q-card-section>
-                <q-img
-                  style="
-                    width: 500px;
-                    height: 500px;
-                    image-rendering: pixelated;
-                  "
-                  @click="
-                    {
-                      imagePopup[index] = true;
-                    }
-                  "
-                  :src="url"
-                >
-                </q-img>
-              </q-card-section>
-              <q-card-actions align="around">
-                <q-btn
-                  style="width: 100px; height: 32px"
-                  class="q-mx-xs"
-                  size="md"
-                  icon="upload"
-                  color="white"
-                  @click="
-                    () => {
-                      loadSnapshot(index);
-                      resetFocus();
-                      imagePopup[index] = false;
-                    }
-                  "
-                  text-color="black"
-                ></q-btn>
-              </q-card-actions>
-            </q-card>
-          </q-dialog>
-
-          <q-card-actions align="around">
-            <q-btn
-              style="width: 24px; height: 16px"
-              class="q-mx-xs"
-              size="sm"
-              icon="upload"
-              color="white"
-              @click="
-                () => {
-                  loadSnapshot(index);
-                  resetFocus();
-                }
-              "
-              text-color="black"
-            ></q-btn>
-            <q-btn
-              style="width: 24px; height: 16px"
-              class="q-mx-xs"
-              size="sm"
-              icon="download"
-              color="white"
-              @click="
-                () => {
-                  setSnapshot(index);
-                  resetFocus();
-                }
-              "
-              text-color="black"
-            ></q-btn>
-          </q-card-actions>
-        </q-card> -->
-        <q-space></q-space>
-        <q-btn-toggle
-          title="Pauses or resumes the automatic collapser, based on the configured solve speed (space)"
-          tabindex="-1"
-          size="xl"
-          v-model="autoCollapse"
-          class="my-custom-toggle"
-          toggle-color="primary"
-          color="white"
-          @click="resetFocus"
-          text-color="primary"
-          @update:model-value="
-            (val) => {
-              if (val) {
-                this.worker.postMessage({ question: 'auto' });
-              }
-            }
-          "
-          :options="[
-            { icon: 'pause', value: false },
-            { icon: 'play_arrow', value: true },
-          ]"
-        />
-        <q-space></q-space>
-      </span>
-    </q-page-container>
-
-    <q-footer>
-      <q-bar dense class="bg-grey">
+    <div class="footerArea">
+      <q-bar class="bg-grey">
         <q-badge transparent :align="'middle'">
           x: {{ this.mx }} | y: {{ this.my }}
         </q-badge>
-        <q-badge transparent :align="'middle'">
-          <!-- lmao -->
-          choices:
-          {{
-            //  Formula: c + C * y + C * Y * x
-            this.mx >= 0 &&
-            this.mx < this.width &&
-            this.my >= 0 &&
-            this.my < this.height
-              ? this.grid?.nameIndex?.filter(
-                  (n) =>
-                    this.grid?.choices?.[
-                      this.grid?.invertedIndex[n] +
-                        this.grid?.nameIndex.length * this.my +
-                        this.grid?.nameIndex.length * this.height * this.mx
-                    ]
-                )
-              : []
-          }}
-        </q-badge>
+
         <q-badge transparent :align="'middle'">
           <!-- lmao -->
           current:
@@ -583,9 +407,29 @@
               : "n/a"
           }}
         </q-badge>
+        <q-badge transparent :align="'middle'">
+          <!-- lmao -->
+          choices:
+          {{
+            //  Formula: c + C * y + C * Y * x
+            this.mx >= 0 &&
+            this.mx < this.width &&
+            this.my >= 0 &&
+            this.my < this.height
+              ? this.grid?.nameIndex?.filter(
+                  (n) =>
+                    this.grid?.choices?.[
+                      this.grid?.invertedIndex[n] +
+                        this.grid?.nameIndex.length * this.my +
+                        this.grid?.nameIndex.length * this.height * this.mx
+                    ]
+                )
+              : []
+          }}
+        </q-badge>
       </q-bar>
-    </q-footer>
-  </q-layout>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -600,6 +444,7 @@ import {
   index,
   isUndefined,
   ones,
+  setCartesian,
   range,
   floor,
   sin,
@@ -616,7 +461,7 @@ export default defineComponent({
   data() {
     return {
       time: 0,
-      width: 64,
+      width: 96,
       height: 64,
       mx: 0,
       my: 0,
@@ -678,6 +523,8 @@ export default defineComponent({
       for (const interval of this.intervals) {
         window.clearInterval(interval);
       }
+      this.intervals = [];
+
       this.worker.postMessage({
         question: "init",
         value: [
@@ -703,6 +550,13 @@ export default defineComponent({
       this.worker.postMessage({
         question: "reset",
       });
+    },
+    // Make fake link and download it.. lol
+    saveImage() {
+      const link = document.createElement("a");
+      link.href = this.getCanvasImageURL();
+      link.download = `environment-${Date.now()}.png`;
+      link.click();
     },
     collapsePathRegen() {
       this.checkpoint();
@@ -759,7 +613,7 @@ export default defineComponent({
       console.log("SETTING STEP SIZE");
       this.worker.postMessage({ question: "step", value: this.stepSize });
     },
-    updateCanvas(w, h) {
+    updateHighlight(w, h) {
       const arr = Uint8ClampedArray.from(
         new Array(this.width * this.height * 4)
       );
@@ -812,7 +666,8 @@ export default defineComponent({
 
       const highlightImg = new ImageData(arr, w, h);
       this.highlightContext.putImageData(highlightImg, 0, 0);
-
+    },
+    updateCanvas(w, h, cells) {
       const matrix = (this.grid?.chosen)._data;
       // for (let i = 0; i < this.width; i++) {
       //   for (let j = 0; j < this.width; j++) {
@@ -844,13 +699,12 @@ export default defineComponent({
       // this.context.putImageData(img, 0, 0);
 
       // this.context.putImageData(img, 0, 0);
-      for (let i = 0; i < this.width; i++) {
-        for (let j = 0; j < this.height; j++) {
-          this.context.drawImage(
-            this.tiles[matrix[i][j]].img,
-            this.tileDim * i,
-            this.tileDim * j
-          );
+      for (const c of cells) {
+        const i = c[0];
+        const j = c[1];
+        const tileImage = this.tiles[matrix?.[i]?.[j]]?.img;
+        if (tileImage) {
+          this.context.drawImage(tileImage, this.tileDim * i, this.tileDim * j);
         }
       }
     },
@@ -1074,6 +928,8 @@ export default defineComponent({
         this.canRedo = grid.canRedo;
         this.canUndo = grid.canUndo;
 
+        this.updateCanvas(this.width, this.height, grid.modifiedCells);
+
         // lmao h@x0r
         if (this.processBuffer) {
           this.processFlush++;
@@ -1092,6 +948,11 @@ export default defineComponent({
       }
       if (message === "doneInit") {
         console.log("My body is ready");
+        this.updateCanvas(
+          this.width,
+          this.height,
+          setCartesian(range(0, this.width), range(0, this.height))._data
+        );
         this.intervals.push(
           window.setInterval(() => {
             this.worker.postMessage({ question: "update" });
@@ -1100,13 +961,20 @@ export default defineComponent({
         // Feels smoother, more regular
         this.intervals.push(
           window.setInterval(() => {
-            this.updateCanvas(this.width, this.height);
+            this.updateHighlight(this.width, this.height);
           }, 10)
         );
         this.intervals.push(
           window.setInterval(() => {
             this.time++;
           }, 10)
+        );
+      }
+      if (message === "redraw") {
+        this.updateCanvas(
+          this.width,
+          this.height,
+          setCartesian(range(0, this.width), range(0, this.height))._data
         );
       }
     };

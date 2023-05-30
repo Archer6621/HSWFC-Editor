@@ -1,8 +1,50 @@
 // app global css in SCSS form
 
-.canvasHolder {
+.toolbarArea {
+  grid-area: header;
+}
+
+.footerArea {
+  grid-area: footer;
+}
+
+.controlsArea {
+  grid-area: controls;
+}
+
+.settingsArea {
+  grid-area: settings;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tileTreeArea {
+  grid-area: tiles;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvasArea {
   position: relative;
-  box-sizing: border-box;
+  background-color: lighten(lightgray, 15%);
+  justify-content: stretch;
+  grid-area: canvas;
+  border: 1px solid lightgray;
+  border-width: 0px 2px;
+  border-image: linear-gradient(to bottom, lightgray, rgba(0, 0, 0, 0)) 1 100%;
+}
+
+.canvasHolder {
+  position: absolute;
+  margin: auto;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  bottom: 8px;
+  max-width: 98%;
+  max-height: 98%;
   border: 4px solid lightgray;
 }
 
@@ -11,6 +53,20 @@ canvas {
   height: 100%;
   image-rendering: pixelated;
   position: absolute;
+}
+
+.mainGrid {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) 2fr minmax(200px, 1fr);
+  grid-template-rows: auto 1fr 0.2fr 32px;
+  grid-template-areas:
+    "header header  header"
+    "settings canvas  tiles"
+    "settings controls tiles"
+    "footer footer  footer";
 }
 
 .q-tree__node-header:has(div > .selectedtree) {
@@ -24,4 +80,15 @@ canvas {
 
 body {
   overscroll-behavior: contain;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+}
+
+.buttonToggleMW {
+  flex-wrap: wrap;
+}
+
+.buttonToggleMW > button {
+  min-width: 32px !important;
 }

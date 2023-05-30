@@ -896,6 +896,7 @@ export class Grid {
   }
 
   update() {
+    this.modifiedTiles = [];
     while (!this.jobQueue.isEmpty()) {
       const job = this.jobQueue.dequeue();
       switch (job.type) {
@@ -906,7 +907,9 @@ export class Grid {
           this.autoCollapse(job.targets);
           break;
       }
+      this.modifiedTiles.push(...job.targets.map((t) => [t.x, t.y]));
     }
+    return this.modifiedTiles;
   }
 
   // TODO: add relevant params
