@@ -36,7 +36,14 @@
     <q-page-container>
       <!-- <router-view /> -->
       <span style="display: flex">
-        <div class="canvasHolder">
+        <div
+          class="canvasHolder"
+          :style="`min-width: ${this.aspect(true) * 90}vh; min-height: ${
+            this.aspect(false) * 90
+          }vh; width: ${this.aspect(true) * 90}vh; height: ${
+            this.aspect(false) * 90
+          }vh`"
+        >
           <canvas
             id="wfc"
             :width="this.tileDim * this.width"
@@ -164,13 +171,39 @@
           />
           <q-separator style="height: 1px; width: 100%" vertical inset /> -->
 
-          <b class="text-uppercase">Toggles</b>
+          <b class="text-uppercase">Settings</b>
           <q-checkbox
             title="Shows the entropy of the grid instead of the tiles"
             size="md"
             v-model="debug"
             val="md"
             label="Show Entropy"
+            @click="resetFocus"
+          />
+          <q-input
+            v-model.number="this.width"
+            type="number"
+            filled
+            label="width"
+            @update:model-value="
+              () => {
+                initWorker();
+                resetFocus();
+              }
+            "
+            @click="resetFocus"
+          />
+          <q-input
+            v-model.number="this.height"
+            type="number"
+            filled
+            label="height"
+            @update:model-value="
+              () => {
+                initWorker();
+                resetFocus();
+              }
+            "
             @click="resetFocus"
           />
           <q-separator style="height: 1px; width: 100%" vertical inset />
@@ -254,6 +287,21 @@
                 "
               />
             </span>
+            <span class="row">
+              <q-btn
+                title="Reset the grid completely"
+                color="white"
+                class="col"
+                text-color="black"
+                label="Regenerate"
+                @click="
+                  () => {
+                    collapsePathRegen();
+                    resetFocus();
+                  }
+                "
+              />
+            </span>
           </div>
           <q-separator style="height: 1px; width: 100%" vertical inset />
 
@@ -271,8 +319,10 @@
                   icon: 'img:dot-xs.svg',
                   value: 1,
                 },
-                { icon: 'img:dot-s.svg', value: 5 },
-                { icon: 'img:dot-m.svg', value: 9 },
+                { icon: 'img:dot-s.svg', value: 3 },
+
+                { icon: 'img:dot-m.svg', value: 5 },
+                { icon: 'img:dot-l.svg', value: 9 },
                 { icon: 'img:dot.svg', value: 15 },
               ]"
               @click="resetFocus"
@@ -317,7 +367,7 @@
           <q-separator style="height: 1px; width: 100%" vertical inset />
 
           <b class="text-uppercase" title="Speed at which the WFC solver runs"
-            >Solve Speed</b
+            >Generation Speed</b
           >
 
           <q-item>
@@ -500,8 +550,8 @@
                   (n) =>
                     this.grid?.choices?.[
                       this.grid?.invertedIndex[n] +
-                        this.grid?.nameIndex.length * this.mx + // TODO: Investigate why this is flipped compared to the algorithm...
-                        this.grid?.nameIndex.length * this.height * this.my
+                        this.grid?.nameIndex.length * this.my +
+                        this.grid?.nameIndex.length * this.height * this.mx
                     ]
                 )
               : []
@@ -517,7 +567,7 @@
             this.my >= 0 &&
             this.my < this.height
               ? this.grid?.nameIndex?.[
-                  this.grid?.chosen._data?.[this.my]?.[this.mx]
+                  this.grid?.chosen._data?.[this.mx]?.[this.my]
                 ]
               : "n/a"
           }}
@@ -529,7 +579,7 @@
             this.mx < this.width &&
             this.my >= 0 &&
             this.my < this.height
-              ? this.grid?.entropy._data?.[this.my]?.[this.mx]
+              ? this.grid?.entropy._data?.[this.mx]?.[this.my]
               : "n/a"
           }}
         </q-badge>
@@ -542,6 +592,8 @@
 import { defineComponent, ref, toRaw, nextTick } from "vue";
 import {
   flatten,
+  transpose,
+  min,
   round,
   zeros,
   matrix,
@@ -564,14 +616,14 @@ export default defineComponent({
   data() {
     return {
       time: 0,
-      width: 32,
-      height: 32,
+      width: 64,
+      height: 64,
       mx: 0,
       my: 0,
       mxp: 0,
       myp: 0,
       size: 5,
-      stepSize: 5,
+      stepSize: 50,
       intervalId: undefined,
       grid: undefined,
       context: undefined,
@@ -601,6 +653,8 @@ export default defineComponent({
       processFlush: 0,
       tileDim: 0,
       tilesetData: undefined,
+      intervals: [],
+      workerData: {},
     };
   },
   computed: {
@@ -620,6 +674,26 @@ export default defineComponent({
   },
 
   methods: {
+    initWorker() {
+      for (const interval of this.intervals) {
+        window.clearInterval(interval);
+      }
+      this.worker.postMessage({
+        question: "init",
+        value: [
+          this.width,
+          this.height,
+          toRaw(this.workerData.nodes),
+          toRaw(this.workerData.adjacencies),
+          toRaw(this.workerData.invertedIndex),
+        ],
+      });
+    },
+    aspect(w) {
+      return w
+        ? min(1, this.width / this.height)
+        : min(1, this.height / this.width);
+    },
     resetFocus() {
       document.body.setAttribute("tabindex", "-1");
       document.body.focus();
@@ -628,6 +702,13 @@ export default defineComponent({
     reset() {
       this.worker.postMessage({
         question: "reset",
+      });
+    },
+    collapsePathRegen() {
+      this.checkpoint();
+      this.worker.postMessage({
+        question: "collapse path regen",
+        value: [this.tile_index],
       });
     },
     loadSnapshot(i) {
@@ -683,29 +764,56 @@ export default defineComponent({
         new Array(this.width * this.height * 4)
       );
 
-      // TODO: loop for full marker?
+      for (
+        let i = round(-this.size / 2) + 1;
+        i <= round(this.size / 2) - 1;
+        i++
+      ) {
+        for (
+          let j = round(-this.size / 2) + 1;
+          j <= round(this.size / 2) - 1;
+          j++
+        ) {
+          // try {
+          if (
+            this.mx + i >= 0 &&
+            this.mx + i < this.width &&
+            this.my + j >= 0 &&
+            this.my + j < this.height
+          ) {
+            arr[4 * (this.mx + i) + 4 * (this.my + j) * w + 1] = 100;
+
+            arr[4 * (this.mx + i) + 4 * (this.my + j) * w] = 255;
+            arr[4 * (this.mx + i) + 4 * (this.my + j) * w + 3] = 50;
+          }
+          // } catch {}
+        }
+      }
+
       arr[4 * this.mx + 4 * this.my * w] = 255;
+      arr[4 * this.mx + 4 * this.my * w + 1] = 0;
+
       arr[4 * this.mx + 4 * this.my * w + 3] = 255;
 
       for (let p of this.paintBuffer) {
-        arr[4 * p[1] + 4 * p[0] * w] = 255;
-        arr[4 * p[1] + 4 * p[0] * w + 1] = 255;
+        arr[4 * p[0] + 4 * p[1] * w] = 255;
+        arr[4 * p[0] + 4 * p[1] * w + 1] = 255;
 
-        arr[4 * p[1] + 4 * p[0] * w + 3] = 128;
+        arr[4 * p[0] + 4 * p[1] * w + 3] = 128;
       }
 
       for (let p of this.processBuffer) {
-        arr[4 * p[1] + 4 * p[0] * w + 1] =
+        arr[4 * p[0] + 4 * p[1] * w + 1] =
           100 + (155 * (1 + sin(this.time / 5))) / 2;
-        arr[4 * p[1] + 4 * p[0] * w + 2] = 255;
+        arr[4 * p[0] + 4 * p[1] * w + 2] = 255;
 
-        arr[4 * p[1] + 4 * p[0] * w + 3] = 128;
+        arr[4 * p[0] + 4 * p[1] * w + 3] = 128;
       }
 
       const highlightImg = new ImageData(arr, w, h);
       this.highlightContext.putImageData(highlightImg, 0, 0);
 
-      const matrix = this.grid?.chosen._data;
+      const matrix = (this.grid?.chosen)._data;
       // for (let i = 0; i < this.width; i++) {
       //   for (let j = 0; j < this.width; j++) {
       //     this.context.drawImage(this.tile, 7 * i, 7 * j);
@@ -739,7 +847,7 @@ export default defineComponent({
       for (let i = 0; i < this.width; i++) {
         for (let j = 0; j < this.height; j++) {
           this.context.drawImage(
-            this.tiles[matrix[j][i]].img,
+            this.tiles[matrix[i][j]].img,
             this.tileDim * i,
             this.tileDim * j
           );
@@ -786,7 +894,7 @@ export default defineComponent({
         ) {
           if (i >= 0 && i < this.width && j >= 0 && j < this.height) {
             if (!paintMat._data[i][j]) {
-              this.paintBuffer.push([j, i]);
+              this.paintBuffer.push([i, j]);
               paintMat._data[i][j] = true;
             }
           }
@@ -866,6 +974,7 @@ export default defineComponent({
         const node = nodeArray[nodeIndex];
         const treeNode = {};
         treeNode.color = node.color;
+        treeNode.paintable = node.paintable;
         treeNode.key = nodeIndex;
         treeNode.label = n;
         treeNodeArray.push(treeNode);
@@ -876,7 +985,9 @@ export default defineComponent({
         const treeNode = treeNodeArray[tn.key];
         treeNode.children = [];
         for (const childName in node.children) {
-          treeNode.children.push(treeNodeArray[invertedIndex[childName]]);
+          if (treeNodeArray[invertedIndex[childName]].paintable) {
+            treeNode.children.push(treeNodeArray[invertedIndex[childName]]);
+          }
         }
       }
 
@@ -914,12 +1025,11 @@ export default defineComponent({
         }
       }
       console.log(adjacencies);
+      this.workerData.adjacencies = adjacencies;
+      this.workerData.nodes = nodes;
+      this.workerData.invertedIndex = invertedIndex;
       // Build adjacency hashmap
-
-      this.worker.postMessage({
-        question: "init",
-        value: [this.width, nodes, adjacencies, invertedIndex],
-      });
+      this.initWorker();
     },
   },
   mounted() {
@@ -958,7 +1068,7 @@ export default defineComponent({
     }
     console.log(this.importedTilesets);
 
-    this.worker.onmessage = ({ data: { grid, message } }) => {
+    this.worker.onmessage = ({ data: { grid, message, other } }) => {
       this.grid = grid;
       if (message === "doneUpdate") {
         this.canRedo = grid.canRedo;
@@ -977,21 +1087,29 @@ export default defineComponent({
       if (message === "doneAuto" && this.autoCollapse) {
         this.worker.postMessage({ question: "auto" });
       }
+      if (message === "process") {
+        this.processBuffer = other;
+      }
       if (message === "doneInit") {
         console.log("My body is ready");
-        window.setInterval(() => {
-          this.worker.postMessage({ question: "update" });
-        }, 10);
+        this.intervals.push(
+          window.setInterval(() => {
+            this.worker.postMessage({ question: "update" });
+          }, 10)
+        );
         // Feels smoother, more regular
-        window.setInterval(() => {
-          this.updateCanvas(this.width, this.height);
-        }, 10);
+        this.intervals.push(
+          window.setInterval(() => {
+            this.updateCanvas(this.width, this.height);
+          }, 10)
+        );
+        this.intervals.push(
+          window.setInterval(() => {
+            this.time++;
+          }, 10)
+        );
       }
     };
-
-    window.setInterval(() => {
-      this.time++;
-    }, 10);
 
     // let paintCanvas = (canvas, event) => {
     //   // this.worker.postMessage({

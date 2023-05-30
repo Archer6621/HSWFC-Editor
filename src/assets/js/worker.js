@@ -6,11 +6,12 @@ let autoStepSize = 1;
 self.onmessage = ({ data: { question, value, cells } }) => {
   if (question === "init") {
     const width = value[0];
-    const tileset = value[1];
-    const adjacencies = value[2];
-    const index = value[3];
+    const height = value[1];
+    const tileset = value[2];
+    const adjacencies = value[3];
+    const index = value[4];
 
-    grid = new Grid(width, tileset, adjacencies, index, autoStepSize);
+    grid = new Grid(width, height, tileset, adjacencies, index, autoStepSize);
 
     grid.initialize().then(() => {
       self.postMessage({
@@ -70,5 +71,14 @@ self.onmessage = ({ data: { question, value, cells } }) => {
     grid.snapshot(value);
   } else if (question === "load snapshot") {
     grid.loadSnapshot(value);
+  } else if (question === "collapse path regen") {
+    const tileIndex = value[0];
+
+    cells = grid.collapsePathEnqueue(tileIndex);
+    self.postMessage({
+      grid: grid.getState(),
+      message: "process",
+      other: cells,
+    });
   }
 };

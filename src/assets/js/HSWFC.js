@@ -14,6 +14,7 @@ import {
   or,
   clone,
   random,
+  not,
   xor,
   reshape,
   sqrt,
@@ -337,18 +338,26 @@ class Edge {
 }
 
 class GridState {
-  constructor(choices, chosen, entropy, painted) {
+  constructor(choices, chosen, entropy, painted, collapsePaths) {
     this.index = GridState.i++;
     this.choices = new Uint8Array(choices);
     this.chosen = clone(chosen);
     this.entropy = clone(entropy);
     this.painted = clone(painted);
+    this.collapsePaths = clone(collapsePaths);
   }
 }
 GridState.i = 0;
 
 export class Grid {
-  constructor(gridSize, tileset, adjacencies, invertedIndex, bufferSize) {
+  constructor(
+    gridWidth,
+    gridHeight,
+    tileset,
+    adjacencies,
+    invertedIndex,
+    bufferSize
+  ) {
     this.entropyBufferSize = bufferSize;
     this.paintBuffer = [];
     this.snapshots = {};
@@ -358,12 +367,15 @@ export class Grid {
     this.counter = 0;
     this.gridChoices = Object.keys(tileset).length;
     this.lock = false;
-    this.gridSize = gridSize;
+    this.gridWidth = gridWidth;
+    this.gridHeight = gridHeight;
     this.tileset = tileset;
 
     this.jobQueue = new MinPriorityQueue((job) => job.type);
 
     this.ALL = range(0, this.gridChoices);
+    this.WIDTH = range(0, this.gridWidth);
+    this.HEIGHT = range(0, this.gridHeight);
     this.COLOR = range(0, 4);
 
     this.entropyColors = createPalette({
@@ -371,26 +383,28 @@ export class Grid {
       steps: this.gridChoices,
     }).format("rgba");
     console.log(this.entropyColors);
-    this.index = setCartesian(range(0, gridSize), range(0, gridSize));
-    this.targets = ones(this.gridSize, this.gridSize);
-    this.painted = zeros(this.gridSize, this.gridSize);
+    this.index = setCartesian(
+      range(0, this.gridWidth),
+      range(0, this.gridHeight)
+    );
+    this.targets = ones(this.gridWidth, this.gridHeight);
+    this.painted = zeros(this.gridWidth, this.gridHeight);
     this.index._data.forEach((ind) => {
       this.targets.set([ind[0], ind[1]], new Target(ind[0], ind[1]));
     });
-    this.invIndex = reshape(range(0, this.gridSize * this.gridSize), [
-      this.gridSize,
-      this.gridSize,
+    this.invIndex = reshape(range(0, this.gridWidth * this.gridHeight), [
+      this.gridWidth,
+      this.gridHeight,
     ]);
     this.offsets = new Map(
       Object.entries({
-        D: new Target(1, 0),
-        U: new Target(-1, 0),
-        L: new Target(0, -1),
-        R: new Target(0, 1),
+        R: new Target(1, 0),
+        L: new Target(-1, 0),
+        U: new Target(0, -1),
+        D: new Target(0, 1),
       })
     );
 
-    // TODO: Seems U/D and R/L are flipped
     this.eigenOffsets = { D: 0, U: 2, L: 1, R: 3 };
 
     this.colorMap = new Array(this.gridChoices);
@@ -404,6 +418,7 @@ export class Grid {
       this.allowed[invertedIndex[name]] = tile.generate;
       this.nameIndex[invertedIndex[name]] = name;
     }
+    console.log(this.allowed);
 
     // Build the DAG
     this.nodeIndex = {};
@@ -470,7 +485,7 @@ export class Grid {
       const node = this.nodeIndex[n];
       node.depth =
         new Set(this.pathMap.get(node.index).get(0)).minBy((a) => a.size)
-          .length - 1;
+          ?.length ?? 0 - 1;
     }
 
     // NOTE: If the adjacencies are bad, a giant propagation wave can be triggered right at the start, explains the lag-spike
@@ -565,7 +580,7 @@ export class Grid {
     for (let c = 0; c < this.gridChoices; c++) {
       arr[c] =
         this.choices[
-          c + this.gridChoices * y + this.gridChoices * this.gridSize * x
+          c + this.gridChoices * y + this.gridChoices * this.gridHeight * x
         ];
     }
     return arr;
@@ -574,13 +589,13 @@ export class Grid {
   setChoices(x, y, choices) {
     for (let c = 0; c < this.gridChoices; c++) {
       this.choices[
-        c + this.gridChoices * y + this.gridChoices * this.gridSize * x
+        c + this.gridChoices * y + this.gridChoices * this.gridHeight * x
       ] = choices[c];
     }
   }
 
   async initialize() {
-    // this.choices = ones(this.gridSize, this.gridSize, this.gridChoices); // Done earlier now during eigen init
+    // this.choices = ones(this.gridWidth, this.gridHeight, this.gridChoices); // Done earlier now during eigen init
 
     // Init eigen
     await eig.ready;
@@ -621,8 +636,8 @@ export class Grid {
 
     // Copy masks/adjacencies to eigen matrices
     this.eigenGrid = new eig.Grid(
-      this.gridSize,
-      this.gridSize,
+      this.gridWidth,
+      this.gridHeight,
       this.gridChoices,
       new eig.BoolMatrix(this.adjaug.get("U")._data),
       new eig.BoolMatrix(this.adjaug.get("R")._data),
@@ -636,25 +651,34 @@ export class Grid {
     // set choices
     this.choices = this.eigenGrid.getChoices();
 
+    this.collapsePaths = zeros(
+      this.gridWidth,
+      this.gridHeight,
+      this.gridChoices
+    );
+    this.collapsePaths.subset(
+      index(this.WIDTH, this.HEIGHT, 0),
+      ones(this.gridWidth, this.gridHeight)
+    );
     this.chosen = dotMultiply(
-      ones(this.gridSize, this.gridSize),
+      ones(this.gridWidth, this.gridHeight),
       this.root.index
     );
     this.image = dotMultiply(
-      ones(this.gridSize, this.gridSize, 4),
+      ones(this.gridWidth, this.gridHeight, 4),
       this.colorMap[this.root.index]
     );
     this.entropyImage = dotMultiply(
-      ones(this.gridSize, this.gridSize, 4),
+      ones(this.gridWidth, this.gridHeight, 4),
       this.entropyColors[this.gridChoices - 1]
     );
     this.entropy = dotMultiply(
-      ones(this.gridSize, this.gridSize),
+      ones(this.gridWidth, this.gridHeight),
       this.gridChoices
     );
 
-    const rX = floor(random(this.gridSize));
-    const rY = floor(random(this.gridSize));
+    const rX = floor(random(this.gridWidth));
+    const rY = floor(random(this.gridHeight));
 
     this.minEntropy = new SortedSet();
     this.minEntropy.add(
@@ -663,12 +687,34 @@ export class Grid {
     );
 
     // this.clearQueue();
+
+    ///////////////////////////////////////////////
+    const rootChoices = this.SM[this.root.index]._data;
+
+    // TODO: This can be done more efficiently
+    for (let x = 0; x < this.gridWidth; x++) {
+      for (let y = 0; y < this.gridHeight; y++) {
+        this.setChoices(x, y, rootChoices);
+        // console.log("new array: ", newChoices);
+
+        // Sync with eigen
+        var v = new eig.Vector();
+        rootChoices.forEach((val) => v.push_back(val));
+        this.eigenGrid.setCol(x, y, v);
+      }
+    }
   }
 
   // Undo system
   checkpoint() {
     this.undoStack.push(
-      new GridState(this.choices, this.chosen, this.entropy, this.painted)
+      new GridState(
+        this.choices,
+        this.chosen,
+        this.entropy,
+        this.painted,
+        this.collapsePaths
+      )
     );
     this.redoStack = [];
     this.current = null;
@@ -680,7 +726,8 @@ export class Grid {
       this.choices,
       this.chosen,
       this.entropy,
-      this.painted
+      this.painted,
+      this.collapsePaths
     );
   }
 
@@ -704,7 +751,8 @@ export class Grid {
         this.choices,
         this.chosen,
         this.entropy,
-        this.painted
+        this.painted,
+        this.collapsePaths
       );
     }
     if (this.undoStack.length > 0) {
@@ -723,6 +771,7 @@ export class Grid {
     this.chosen = clone(gridState.chosen);
     this.entropy = clone(gridState.entropy);
     this.painted = clone(gridState.painted);
+    this.collapsePaths = clone(gridState.collapsePaths);
 
     // We have to re-add what we had done so far
     this.minEntropy = new SortedSet();
@@ -743,8 +792,8 @@ export class Grid {
 
     while (this.minEntropy.length === 0) {
       // Choose random point
-      const rX = floor(random(this.gridSize));
-      const rY = floor(random(this.gridSize));
+      const rX = floor(random(this.gridWidth));
+      const rY = floor(random(this.gridHeight));
 
       this.minEntropy.add(
         this.invIndex._data[rX][rY],
@@ -886,7 +935,7 @@ export class Grid {
     //     j < Math.floor(y + markerSize / 2) + 1;
     //     j++
     //   ) {
-    //     if (i >= 0 && i < this.gridSize && j >= 0 && j < this.gridSize) {
+    //     if (i >= 0 && i < this.gridWidth && j >= 0 && j < this.gridHeight) {
     //       // stuff here
     //     }
     //   }
@@ -899,6 +948,23 @@ export class Grid {
       targets.push(new Target(-1, -1));
     }
     this.jobQueue.enqueue({ type: 1, targets: targets });
+  }
+
+  collapsePathEnqueue(tileIndex) {
+    console.log(tileIndex);
+    const slice = this.collapsePaths.subset(
+      index(this.WIDTH, this.HEIGHT, [tileIndex])
+    );
+    const targets = [];
+    const cells = [];
+    slice.forEach((c, i) => {
+      if (c) {
+        targets.push(new Target(i[0], i[1], tileIndex));
+        cells.push([i[0], i[1]]);
+      }
+    });
+    this.jobQueue.enqueue({ type: 0, targets: targets });
+    return cells;
   }
 
   // TODO: bonus feature, to illustrate the idea of job enqueueing
@@ -925,6 +991,8 @@ export class Grid {
 
       if (currentTileIndex === targetTileIndex) {
         // console.log("NO-OP");
+        collapseBin.push(t);
+
         continue;
       } else if (
         !targetSubtreeMask.get([currentTileIndex]) &&
@@ -945,33 +1013,40 @@ export class Grid {
       }
     }
 
+    // Painting always sets the collapse path to the current tile
+
     // Order from most flexible to most restrictive
 
     // Replace
-    if (replaceBinUp && replaceBinDown) {
+    if (replaceBinUp.length > 0 && replaceBinDown.length > 0) {
+      // console.log(replaceBinUp);
+      //
       this.uncollapse(replaceBinUp);
       this.depropagate(replaceBinUp);
       this.collapse(replaceBinDown);
       this.propagate(replaceBinDown);
     }
     // Uncollapse
-    if (uncollapseBin) {
+    if (uncollapseBin.length > 0) {
       this.uncollapse(uncollapseBin);
       this.depropagate(uncollapseBin);
     }
     // Regular collapse
-    if (collapseBin) {
-      this.collapse(collapseBin);
+    if (collapseBin.length > 0) {
+      this.collapse(collapseBin, true);
       this.propagate(collapseBin);
     }
   }
 
-  collapse(targets) {
+  collapse(targets, manual = false) {
     for (let t of targets) {
       const x = t.x;
       const y = t.y;
       const tile_index = t.tile_index;
-      const choices = this.getChoices(x, y);
+      let choices = this.getChoices(x, y);
+      if (!manual) {
+        choices = this.getChoices(x, y);
+      }
       const currentTile = this.chosen._data[x][y];
 
       const childMask = this.CM[currentTile];
@@ -1010,6 +1085,7 @@ export class Grid {
 
       const newChoices = dotMultiply(this.SM[choice], choices);
       newChoices._data[choice] = 1; //.set([choice], 1);
+      this.collapsePaths.set([x, y, choice], 1);
       this.setChoices(x, y, newChoices._data);
       // console.log("new array: ", newChoices);
 
@@ -1060,6 +1136,14 @@ export class Grid {
     return true;
   }
 
+  // resetCollapsePath(targets) {
+  //   const initial = zeros(this.gridChoices);
+  //   initial.set([this.root.index], 1);
+  //   for (let t of targets) {
+  //     this.collapsePaths.subset(index([t.x], [t.y], this.ALL), initial);
+  //   }
+  // }
+
   uncollapse(targets) {
     for (let t of targets) {
       const x = t.x;
@@ -1075,9 +1159,8 @@ export class Grid {
       }
 
       const newChoices = subtreeMask;
-      newChoices._data[tile_index] = 1; //.set([choice], 1);
+      newChoices._data[tile_index] = 1;
       this.setChoices(x, y, newChoices._data);
-      // console.log("new array: ", newChoices);
 
       // Sync with eigen
       // TODO: can move this into "setChoices"
@@ -1088,7 +1171,24 @@ export class Grid {
       // this.chosen.subset(index(x, y), choice);
       this.chosen._data[x][y] = tile_index;
 
-      // this.entropy.subset(index(x, y), this.getCellEntropy(x, y));
+      // TODO: should precompute this like the other properties
+
+      // Setting the new collapse paths - goals
+      // - We want to preserve information about how we got to the original tile as much as possible, so we have to consider the ancestors
+      // - At the same time, we should remove anything that is in the subtree of the tile it is currently being set to, as that is no longer relevant; we are going to collapse to new tiles
+      const anc = zeros(this.gridChoices);
+      this.nodeIndex[this.nameIndex[tile_index]].ancestors().forEach((a) => {
+        anc.set([a.index], 1);
+      });
+      const currentCollapsePath = squeeze(
+        this.collapsePaths.subset(index(x, y, this.ALL))
+      );
+      const subtree = clone(this.SM[tile_index]);
+      const newCollapsePath = and(anc, and(currentCollapsePath, not(subtree)));
+      newCollapsePath.set([tile_index], true);
+      this.collapsePaths.subset(index(x, y, this.ALL), newCollapsePath);
+
+      // TODO: currently not used
       if (tile_index >= 0) {
         this.painted._data[x][y] = 1;
       }
@@ -1105,10 +1205,8 @@ export class Grid {
           })
         );
       } else {
-        // console.log("DEL:", x, y, "|", entropyValue);
         this.painted._data[x][y] = 0;
         const s = this.minEntropy.del(this.invIndex._data[x][y]);
-        // console.log(s, this.minEntropy.min());
       }
       // // console.log(this.minEntropy);
       // // console.log("STATE:", this.entropyBuffer.toArray());
@@ -1118,7 +1216,6 @@ export class Grid {
       this.image._data[x][y][2] = this.colorMap[tile_index][2];
 
       // // For debugging purposes
-      // // const entr = this.entropy.get([x, y]);
       this.entropyImage.subset(
         index(x, y, this.COLOR),
         entropyValue <= this.entropyColors.length && entropyValue >= 0
@@ -1143,7 +1240,7 @@ export class Grid {
       this.offsets.forEach((o, k) => {
         const nx = p.x + o.x;
         const ny = p.y + o.y;
-        if (nx >= 0 && nx < this.gridSize && ny >= 0 && ny < this.gridSize) {
+        if (nx >= 0 && nx < this.gridWidth && ny >= 0 && ny < this.gridHeight) {
           var diff = this.eigenGrid.depropagate(
             p.x,
             p.y,
@@ -1213,7 +1310,7 @@ export class Grid {
         const nx = p.x + o.x;
         const ny = p.y + o.y;
 
-        if (nx >= 0 && nx < this.gridSize && ny >= 0 && ny < this.gridSize) {
+        if (nx >= 0 && nx < this.gridWidth && ny >= 0 && ny < this.gridHeight) {
           var diff = this.eigenGrid.propagate(
             p.x,
             p.y,
