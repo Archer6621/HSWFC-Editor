@@ -165,12 +165,12 @@
             <q-item-label class="q-py-sm">
               <b
                 class="text-uppercase"
-                title="Speed at which the WFC solver runs"
+                title="Speed at which the automatic generator runs"
                 >Generation Speed</b
               >
             </q-item-label>
             <q-btn-toggle
-              title="Speed at which the WFC solver runs"
+              title="Speed at which the automatic generator runs"
               spread
               v-model="stepSize"
               style="max-width: 100%"
@@ -470,7 +470,7 @@ export default defineComponent({
       mxp: 0,
       myp: 0,
       size: 5,
-      stepSize: 50,
+      stepSize: 15,
       intervalId: undefined,
       grid: undefined,
       context: undefined,
