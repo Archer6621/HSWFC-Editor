@@ -1170,7 +1170,13 @@ export default defineComponent({
         new URL("../assets/default.png", import.meta.url).href
       );
     }
-
+    window.addEventListener("load", function () {
+      // Set a timeout...
+      setTimeout(function () {
+        // Hide the address bar!
+        window.scrollTo(0, 1);
+      }, 0);
+    });
     this.setStepSize();
 
     console.log("MOUNTED");

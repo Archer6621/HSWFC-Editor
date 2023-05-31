@@ -61,6 +61,10 @@ canvas {
   position: relative;
   height: 100vh;
   width: 100vw;
+  @media screen and (orientation: portrait) {
+    height: 100vw;
+    width: 100vh;
+  }
   display: grid;
   grid-template-columns: minmax(150px, 0.75fr) 2fr minmax(200px, 1fr);
   grid-template-rows: auto 1fr 0.2fr 32px;
@@ -80,15 +84,10 @@ canvas {
   color: $dark;
 }
 
+html,
 body {
   overscroll-behavior: none;
   overflow: hidden;
-  width: 100vw;
-  height: 100vh;
-}
-
-html {
-  overscroll-behavior: none;
 }
 
 .buttonToggleMW {
@@ -97,4 +96,17 @@ html {
 
 .buttonToggleMW > button {
   min-width: 32px !important;
+}
+
+@media screen and (orientation: portrait) {
+  html {
+    transform: rotate(-90deg);
+    transform-origin: left top;
+    width: 100vh;
+    height: 100vw;
+    overflow: hidden;
+    position: absolute;
+    top: 100%;
+    left: 0;
+  }
 }
