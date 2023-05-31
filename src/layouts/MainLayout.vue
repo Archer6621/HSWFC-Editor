@@ -195,7 +195,10 @@
       </div>
     </div>
 
-    <div class="controlsArea row q-py-md">
+    <div
+      class="controlsArea row q-py-md"
+      style="max-width: 100%; min-width: 100%"
+    >
       <!-- <b class="text-uppercase">Tool</b>
           <q-btn-toggle
             ref="layout"
@@ -216,17 +219,16 @@
           <q-separator style="height: 1px; width: 100%" vertical inset /> -->
 
       <!-- <b class="text-uppercase">Controls</b> -->
-      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn-toggle
           title="Pauses or resumes the automatic generator, based on the configured generation speed [Space]"
           tabindex="-1"
           v-model="autoCollapse"
           toggle-color="primary"
           color="white"
-          style="flex-grow: 1"
-          size="md"
           spread
-          stretch
+          style="flex-grow: 1; min-width: 0"
+          size="md"
           @click="resetFocus"
           text-color="primary"
           @update:model-value="
@@ -243,11 +245,11 @@
         />
       </span>
 
-      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn
           title="Solve for one step, which is sized according to the set solve speed [Right Arrow]"
           color="white"
-          style="flex-grow: 1"
+          style="flex-grow: 1; min-width: 0"
           text-color="black"
           size="md"
           icon="skip_next"
@@ -261,12 +263,12 @@
         />
       </span>
 
-      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn
           title="Undo [CTRL+Z, Left Arrow]"
           color="white"
           text-color="black"
-          style="flex-grow: 1"
+          style="flex-grow: 1; min-width: 0"
           icon="undo"
           size="md"
           :disable="!canUndo"
@@ -281,7 +283,7 @@
           title="Redo [CTRL+Y]"
           color="white"
           text-color="black"
-          style="flex-grow: 1"
+          style="flex-grow: 1; min-width: 0"
           icon="redo"
           size="md"
           :disable="!canRedo"
@@ -294,14 +296,14 @@
         />
       </span>
 
-      <span class="q-pa-sm" style="display: flex; flex-grow: 1">
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn
           title="Reset the grid completely [R]"
           color="white"
           class="q-mx-xs"
           text-color="black"
           size="md"
-          style="flex-grow: 1"
+          style="flex-grow: 1; min-width: 0"
           icon="delete"
           @click="
             () => {
@@ -317,7 +319,7 @@
           text-color="black"
           size="md"
           icon="rebase_edit"
-          style="flex-grow: 1"
+          style="flex-grow: 1; min-width: 0"
           @click="
             () => {
               collapsePathRegen();
@@ -331,7 +333,7 @@
           class="q-mx-xs"
           text-color="black"
           size="md"
-          style="flex-grow: 1"
+          style="flex-grow: 1; min-width: 0"
           icon="download"
           @click="
             () => {
@@ -610,7 +612,6 @@ export default defineComponent({
       });
     },
     setStepSize() {
-      console.log("SETTING STEP SIZE");
       this.worker.postMessage({ question: "step", value: this.stepSize });
     },
     updateHighlight(w, h) {
@@ -1112,21 +1113,24 @@ export default defineComponent({
     highlightCanvas.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
         this.leftMouseDown = true;
-        this.worker.postMessage({ question: "clear" });
+        // this.worker.postMessage({ question: "clear" });
         this.checkpoint();
-        this.worker.postMessage({ question: "lock" });
-
-        if (this.tool == 0) {
-          paintCanvas(canvas, e);
-        } else if (this.tool == 1) {
-          this.worker.postMessage({ question: "info", value: [] });
-        }
+        // this.worker.postMessage({ question: "lock" });
+        // this.markForPaint();
       }
       return false;
     });
     highlightCanvas.addEventListener("touchend", (e) => {
       this.leftMouseDown = false;
-      this.worker.postMessage({ question: "unlock" });
+      if (this.paintBuffer.length > 0) {
+        this.worker.postMessage({
+          question: "paint",
+          value: [this.tile_index],
+          cells: flatten(toRaw(this.paintBuffer)),
+        });
+      }
+      this.processBuffer = this.paintBuffer;
+      this.paintBuffer = [];
     });
     highlightCanvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
@@ -1144,8 +1148,8 @@ export default defineComponent({
             1
         );
 
-        if (this.leftMouseDown && [0, 2].includes(this.tool)) {
-          paintCanvas(canvas, e);
+        if (this.leftMouseDown) {
+          this.markForPaint();
         }
       }
     });
@@ -1154,7 +1158,7 @@ export default defineComponent({
       function (event) {
         event.preventDefault();
       },
-      false
+      { passive: false }
     );
 
     // Add placeholders for snapshots

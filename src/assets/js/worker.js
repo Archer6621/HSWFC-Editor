@@ -76,6 +76,10 @@ self.onmessage = ({ data: { question, value, cells } }) => {
       grid.autoEnqueue(autoStepSize * autoStepSize);
     }
     grid.update();
+    self.postMessage({
+      grid: grid.getState(),
+      message: "redraw",
+    });
     self.postMessage({ grid: grid.getState(), message: "doneStep" });
   } else if (question === "lock") {
     grid.lock = true;

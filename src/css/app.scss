@@ -10,6 +10,8 @@
 
 .controlsArea {
   grid-area: controls;
+  flex-wrap: nowrap;
+  max-width: 50%;
 }
 
 .settingsArea {
