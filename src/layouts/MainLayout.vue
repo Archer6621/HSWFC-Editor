@@ -86,7 +86,7 @@
 
       <div
         class="q-pa-md q-gutter-sm"
-        style="overflow-y: auto; overflow-x: hidden; flex: 0 1 auto"
+        style="overflow-y: auto; overflow-x: auto; flex: 0 1 auto"
       >
         <q-item>
           <q-checkbox
@@ -369,6 +369,7 @@
         <!-- <q-btn flat round dense>
         <q-icon name="menu" />
       </q-btn> -->
+        <!-- TODO: does not play nicely with 90deg transform -->
         <q-icon name="bolt" size="3vh" />
         <q-toolbar-title style="font-size: 3vh"> HSWFC Editor </q-toolbar-title>
         <!-- <q-btn flat round dense>
