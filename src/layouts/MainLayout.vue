@@ -502,6 +502,7 @@ export default defineComponent({
       tilesetData: undefined,
       intervals: [],
       workerData: {},
+      paintMat: undefined,
     };
   },
   computed: {
@@ -736,7 +737,6 @@ export default defineComponent({
       });
     },
     markForPaint() {
-      const paintMat = zeros(this.width, this.height);
       for (
         let i = Math.floor(this.mx - this.size / 2) + 1;
         i < Math.floor(this.mx + this.size / 2) + 1;
@@ -748,9 +748,9 @@ export default defineComponent({
           j++
         ) {
           if (i >= 0 && i < this.width && j >= 0 && j < this.height) {
-            if (!paintMat._data[i][j]) {
+            if (!this.paintMat._data[i][j]) {
               this.paintBuffer.push([i, j]);
-              paintMat._data[i][j] = true;
+              this.paintMat._data[i][j] = true;
             }
           }
         }
@@ -895,6 +895,7 @@ export default defineComponent({
     this.context = canvas.getContext("2d");
     this.highlightContext = highlightCanvas.getContext("2d");
     this.entropyContext = entropyCanvas.getContext("2d");
+    this.paintMat = zeros(this.width, this.height);
 
     this.worker = new Worker(
       new URL("../assets/js/worker.js", import.meta.url),
@@ -1053,6 +1054,7 @@ export default defineComponent({
         }
         this.processBuffer = this.paintBuffer;
         this.paintBuffer = [];
+        this.paintMat = zeros(this.width, this.height);
       }
     });
     window.addEventListener("keydown", (e) => {
@@ -1131,6 +1133,7 @@ export default defineComponent({
       }
       this.processBuffer = this.paintBuffer;
       this.paintBuffer = [];
+      this.paintMat = zeros(this.width, this.height);
     });
     highlightCanvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
