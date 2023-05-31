@@ -1156,13 +1156,13 @@ export default defineComponent({
         }
       }
     });
-    document.body.addEventListener(
-      "touchmove",
-      function (event) {
-        event.preventDefault();
-      },
-      { passive: false }
-    );
+    // document.body.addEventListener(
+    //   "touchmove",
+    //   function (event) {
+    //     event.preventDefault();
+    //   },
+    //   { passive: false }
+    // );
 
     // Add placeholders for snapshots
     for (const _ of range(0, this.snapshotCount)) {
