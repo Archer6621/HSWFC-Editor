@@ -1002,7 +1002,14 @@ export default defineComponent({
         (this.height * (e.clientY - rect.top)) / highlightCanvas.offsetHeight -
           0.5
       );
-
+      const isPortrait = window.matchMedia(
+        "screen and (orientation: portrait)"
+      ).matches;
+      if (isPortrait) {
+        const x = this.mx;
+        this.mx = this.width - this.my;
+        this.my = x;
+      }
       if (this.mx !== this.mxp || this.my !== this.myp) {
         if (this.leftMouseDown) {
           this.markForPaint();
@@ -1151,6 +1158,14 @@ export default defineComponent({
             highlightCanvas.offsetHeight -
             1
         );
+        const isPortrait = window.matchMedia(
+          "screen and (orientation: portrait)"
+        ).matches;
+        if (isPortrait) {
+          const x = this.mx;
+          this.mx = this.width - this.my;
+          this.my = x;
+        }
 
         if (this.leftMouseDown) {
           this.markForPaint();
