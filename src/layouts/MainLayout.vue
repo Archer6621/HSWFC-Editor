@@ -241,6 +241,141 @@
             />
           </q-item-section>
         </q-item>
+
+        <q-item>
+          <q-item-label class="q-py-sm">
+            <b
+              class="text-uppercase"
+              title="Probability that the tile selected in the hierarchy will be chosen"
+              >Tile Probability</b
+            >
+          </q-item-label>
+        </q-item>
+        <q-item v-for="(url, index) in this.imageUrl" :key="index">
+          <q-card class="q-ma-sm" :style="`width: 70%`">
+            <q-card-section horizontal class="row items-center q-pb-none">
+              <q-img
+                :style="`aspect-ratio: ${this.aspect(true)}/ ${this.aspect()};`"
+                @click="
+                  {
+                    imagePopup[index] = true;
+                  }
+                "
+                :src="url"
+              >
+              </q-img>
+
+              <q-dialog v-model="imagePopup[index]">
+                <q-card style="width: 30%; max-width: 30%">
+                  <q-card-section class="row items-center q-pb-none">
+                    <q-space />
+                    <q-btn icon="close" flat round dense v-close-popup />
+                  </q-card-section>
+                  <q-card-section class="row items-center q-pb-none">
+                    <q-img
+                      style="image-rendering: pixelated; max-width: 100%"
+                      @click="
+                        {
+                          imagePopup[index] = true;
+                        }
+                      "
+                      :src="url"
+                    >
+                    </q-img>
+                  </q-card-section>
+                  <q-card-section>
+                    <q-card-actions align="around">
+                      <q-btn
+                        style="width: 100px; height: 32px"
+                        class="q-mx-xs"
+                        size="md"
+                        icon="upload"
+                        color="white"
+                        @click="
+                          () => {
+                            loadSnapshot(index);
+                            resetFocus();
+                            imagePopup[index] = false;
+                          }
+                        "
+                        text-color="black"
+                      ></q-btn>
+                    </q-card-actions>
+                  </q-card-section>
+                </q-card>
+                <!-- <q-card>
+                  <q-card-section class="row items-center q-pb-none">
+                    <q-space />
+                    <q-btn icon="close" flat round dense v-close-popup />
+                  </q-card-section>
+
+                  <q-card-section>
+                    <q-img
+                      style="image-rendering: pixelated; width: 800px"
+                      @click="
+                        {
+                          imagePopup[index] = true;
+                        }
+                      "
+                      :src="url"
+                    >
+                    </q-img>
+                  </q-card-section>
+                  <q-card-section>
+                    <q-card-actions align="around">
+                      <q-btn
+                        style="width: 100px; height: 32px"
+                        class="q-mx-xs"
+                        size="md"
+                        icon="upload"
+                        color="white"
+                        @click="
+                          () => {
+                            loadSnapshot(index);
+                            resetFocus();
+                            imagePopup[index] = false;
+                          }
+                        "
+                        text-color="black"
+                      ></q-btn>
+                    </q-card-actions>
+                  </q-card-section>
+                </q-card> -->
+              </q-dialog>
+
+              <q-card-actions vertical align="around">
+                <q-btn
+                  style="width: 24px; height: 16px"
+                  class="q-mb-sm"
+                  size="md"
+                  icon="arrow_right"
+                  color="white"
+                  @click="
+                    () => {
+                      loadSnapshot(index);
+                      resetFocus();
+                    }
+                  "
+                  text-color="black"
+                ></q-btn>
+                <q-btn
+                  style="width: 24px; height: 16px"
+                  class="q-mt-sm"
+                  size="md"
+                  icon="arrow_left"
+                  color="white"
+                  @click="
+                    () => {
+                      setSnapshot(index);
+                      resetFocus();
+                    }
+                  "
+                  text-color="black"
+                ></q-btn>
+              </q-card-actions>
+            </q-card-section>
+          </q-card>
+        </q-item>
       </div>
     </div>
 
@@ -542,7 +677,7 @@ export default defineComponent({
       expanded: [],
       canRedo: false,
       canUndo: false,
-      snapshotCount: 4,
+      snapshotCount: 2,
       imageUrl: [],
       imagePopup: [],
       paintBuffer: [],

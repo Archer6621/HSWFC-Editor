@@ -85,6 +85,10 @@ self.onmessage = ({ data: { question, value, cells } }) => {
     grid.snapshot(value);
   } else if (question === "load snapshot") {
     grid.loadSnapshot(value);
+    self.postMessage({
+      grid: grid.getState(),
+      message: "redraw",
+    });
   } else if (question === "collapse path regen") {
     const tileIndex = value[0];
 
