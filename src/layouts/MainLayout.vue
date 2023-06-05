@@ -433,7 +433,7 @@
           x: {{ this.mx }} | y: {{ this.my }}
         </q-badge>
 
-        <q-badge transparent :align="'middle'">
+        <q-badge v-show="false" transparent :align="'middle'">
           <!-- lmao -->
           current:
           {{
@@ -448,7 +448,7 @@
               : "n/a"
           }}
         </q-badge>
-        <q-badge transparent :align="'middle'">
+        <q-badge v-show="false" transparent :align="'middle'">
           entropy:
           {{
             this.mx >= 0 &&
@@ -459,7 +459,7 @@
               : "n/a"
           }}
         </q-badge>
-        <q-badge transparent :align="'middle'">
+        <q-badge v-show="false" transparent :align="'middle'">
           <!-- lmao -->
           choices:
           {{
