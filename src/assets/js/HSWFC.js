@@ -679,7 +679,7 @@ export class Grid {
       this.colorMap[this.root.index]
     );
     this.entropyImage = dotMultiply(
-      ones(this.gridWidth, this.gridHeight, 4),
+      ones(this.gridHeight, this.gridWidth, 4),
       this.entropyColors[this.gridChoices - 1]
     );
     this.entropy = dotMultiply(
@@ -823,7 +823,7 @@ export class Grid {
       return this.colorMap[this.chosen.get(p)][i[2]];
     });
     this.entropyImage = this.entropyImage.map((v, i, m) => {
-      const p = [i[0], i[1]];
+      const p = [i[1], i[0]];
       const entropyValue = floor(this.entropy.get(p));
       const color =
         entropyValue <= this.entropyColors.length && entropyValue >= 0
@@ -1142,7 +1142,7 @@ export class Grid {
       // For debugging purposes
       // const entr = this.entropy.get([x, y]);
       this.entropyImage.subset(
-        index(x, y, this.COLOR),
+        index(y, x, this.COLOR),
         entropyValue <= this.entropyColors.length && entropyValue >= 0
           ? this.entropyColors[floor(entropyValue - 1)]
           : [0, 0, 0, 255]
@@ -1232,7 +1232,7 @@ export class Grid {
 
       // // For debugging purposes
       this.entropyImage.subset(
-        index(x, y, this.COLOR),
+        index(y, x, this.COLOR),
         entropyValue <= this.entropyColors.length && entropyValue >= 0
           ? this.entropyColors[floor(entropyValue - 1)]
           : [0, 0, 0, 255]
@@ -1302,13 +1302,13 @@ export class Grid {
       }
       try {
         this.entropyImage.subset(
-          index(n.x, n.y, this.COLOR),
+          index(n.y, n.x, this.COLOR),
           entropyValue <= this.entropyColors.length
             ? this.entropyColors[round(entropyValue) - 1]
             : [0, 0, 0, 255]
         );
       } catch {
-        this.entropyImage.subset(index(n.x, n.y, this.COLOR), [255, 0, 0, 255]);
+        this.entropyImage.subset(index(n.y, n.x, this.COLOR), [255, 0, 0, 255]);
       }
     }
     this.propagate(P, false);
@@ -1375,7 +1375,7 @@ export class Grid {
       }
       try {
         this.entropyImage.subset(
-          index(n.x, n.y, this.COLOR),
+          index(n.y, n.x, this.COLOR),
           entropyValue <= this.entropyColors.length
             ? this.entropyColors[round(entropyValue) - 1]
             : [0, 0, 0, 255]
