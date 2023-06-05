@@ -94,5 +94,10 @@ self.onmessage = ({ data: { question, value, cells } }) => {
       message: "process",
       other: cells,
     });
+  } else if (question === "prob mod") {
+    const edgeIndex = value[0];
+
+    const modifier = value[1];
+    grid.setMod(edgeIndex, modifier);
   }
 };

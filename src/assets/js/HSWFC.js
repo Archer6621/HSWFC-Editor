@@ -334,6 +334,7 @@ class Node {
 class Edge {
   constructor(weight) {
     this.weight = weight;
+    this.mod = 1;
   }
 }
 
@@ -422,6 +423,7 @@ export class Grid {
 
     // Build the DAG
     this.nodeIndex = {};
+    this.edgeIndexDown = {};
     for (const n in tileset) {
       this.nodeIndex[n] = new Node(n, invertedIndex[n]);
     }
@@ -429,10 +431,14 @@ export class Grid {
     for (const n in tileset) {
       const node = tileset[n];
       for (const c in node.children) {
+        const downEdge = new Edge(node.children[c]);
         this.nodeIndex[n].outgoing = this.nodeIndex[n].outgoing.set(
           this.nodeIndex[c],
-          new Edge(node.children[c])
+          downEdge
         );
+        this.edgeIndexDown[
+          `${this.nodeIndex[n].index}|${this.nodeIndex[c].index}`
+        ] = downEdge;
         this.nodeIndex[c].incoming = this.nodeIndex[c].incoming.set(
           this.nodeIndex[n],
           new Edge(node.children[n])
@@ -551,6 +557,10 @@ export class Grid {
     // }
 
     // console.log(this.nodeIndex["sand"].commonAncestor(this.nodeIndex["grass"]));
+  }
+
+  setMod(edgeIndex, modifier) {
+    this.edgeIndexDown[edgeIndex].mod = modifier;
   }
 
   getState() {
@@ -1026,7 +1036,7 @@ export class Grid {
       //
       this.uncollapse(replaceBinUp);
       this.depropagate(replaceBinUp);
-      this.collapse(replaceBinDown);
+      this.collapse(replaceBinDown, true);
       this.propagate(replaceBinDown);
     }
     // Uncollapse
@@ -1052,14 +1062,16 @@ export class Grid {
       }
       const currentTile = this.chosen._data[x][y];
 
-      const childMask = this.CM[currentTile];
+      const childMask = clone(this.CM[currentTile]);
 
       // Apply weights
-      for (const cidx of this.indices(childMask._data)) {
-        const edge = this.nodeIndex[this.nameIndex[currentTile]].outgoing.get(
-          this.nodeIndex[this.nameIndex[cidx]]
-        );
-        childMask._data[cidx] = edge.weight; //.set([cidx], edge.weight);
+      if (!manual) {
+        for (const cidx of this.indices(childMask._data)) {
+          const edge = this.nodeIndex[this.nameIndex[currentTile]].outgoing.get(
+            this.nodeIndex[this.nameIndex[cidx]]
+          );
+          childMask._data[cidx] *= edge.weight * edge.mod;
+        }
       }
 
       let choice = pickRandom(this.ALL, dotMultiply(choices, childMask));

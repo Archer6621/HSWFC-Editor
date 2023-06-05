@@ -15,26 +15,48 @@
       <div class="q-pa-md q-gutter-sm" style="overflow-y: auto; flex: 0 1 auto">
         <q-tree
           :nodes="tileTree"
+          ref="tree"
           default-expand-all
-          v-model:selected="tile_index"
+          v-model:selected="selectedNode"
           :duration="50"
           v-model:expanded="expanded"
-          node-key="key"
-          @click="resetFocus"
+          node-key="domKey"
+          @click="
+            (e) => {
+              resetFocus();
+            }
+          "
           @update:expanded="resetFocus"
         >
           <template v-slot:default-header="prop">
             <div
               class="row items-center"
               v-bind:class="{
-                selectedtree: prop.tree.selected === prop.node.key,
+                selectedtree: prop.tree.selected === prop.node.domKey,
+                prb0:
+                  this.probDict[prop.node.domKey] === this.probMods[0].value,
+                prb1:
+                  this.probDict[prop.node.domKey] === this.probMods[1].value,
+                prb2:
+                  this.probDict[prop.node.domKey] === this.probMods[2].value,
+                prb3:
+                  this.probDict[prop.node.domKey] === this.probMods[3].value,
+                prb4:
+                  this.probDict[prop.node.domKey] === this.probMods[4].value,
               }"
             >
+              <!-- () -->
+              <!-- {{ this.print(this) }} -->
+              <!-- {{ prop }} -->
               <!-- <q-icon
                     name="square"
                     left
                     :style="`color: rgb(${prop.node.color[0]}, ${prop.node.color[1]}, ${prop.node.color[2]})`"
                   ></q-icon> -->
+              <!-- :ref="
+                (el) =>
+                  `vla`
+              " -->
               <q-img
                 style="margin-right: 8px"
                 width="24px"
@@ -192,6 +214,33 @@
             />
           </q-item-section>
         </q-item>
+        <q-item>
+          <q-item-section>
+            <q-item-label class="q-py-sm">
+              <b
+                class="text-uppercase"
+                title="Probability that the tile selected in the hierarchy will be chosen"
+                >Tile Probability</b
+              >
+            </q-item-label>
+            <q-btn-toggle
+              title="Probability that the tile selected in the hierarchy will be chosen"
+              spread
+              v-model="this.probDict[this.selectedNode]"
+              style="max-width: 100%"
+              class="buttonToggleMW"
+              toggle-color="yellow-7"
+              :options="this.probMods"
+              @click="resetFocus"
+              @update:model-value="
+                () => {
+                  setProbMod();
+                  resetFocus();
+                }
+              "
+            />
+          </q-item-section>
+        </q-item>
       </div>
     </div>
 
@@ -221,7 +270,7 @@
       <!-- <b class="text-uppercase">Controls</b> -->
       <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn-toggle
-          title="Pauses or resumes the automatic generator, based on the configured generation speed [Space]"
+          title="Pauses or resumes the generator, based on the configured generation speed [Space]"
           tabindex="-1"
           v-model="autoCollapse"
           toggle-color="primary"
@@ -481,7 +530,7 @@ export default defineComponent({
       rightMouseDown: false,
       autoCollapse: false,
       debug: false,
-      tile_index: 0,
+      selectedNode: "|0",
       worker: undefined,
       tool: 0,
       tiles: [],
@@ -504,11 +553,42 @@ export default defineComponent({
       intervals: [],
       workerData: {},
       paintMat: undefined,
+      probDict: {},
+      probMods: [
+        {
+          icon: "img:density_least.svg",
+          color: "red-5",
+          value: 0.05,
+        },
+        {
+          icon: "img:density_less.svg",
+          color: "red-3",
+          value: 0.25,
+        },
+        {
+          // icon: "scatter_plot",
+          color: "grey-5",
+          value: 1,
+        },
+        {
+          icon: "img:density_more.svg",
+          color: "blue-3",
+          value: 5,
+        },
+        {
+          icon: "img:density_most.svg",
+          color: "blue-5",
+          value: 25,
+        },
+      ],
     };
   },
   computed: {
     getWindow() {
       return window;
+    },
+    tile_index() {
+      return parseInt(this.selectedNode.split("|")[1]);
     },
   },
   setup() {
@@ -523,6 +603,18 @@ export default defineComponent({
   },
 
   methods: {
+    setProbMod() {
+      console.log(
+        "SETTING PROB MOD",
+        this.selectedNode,
+        "to",
+        this.probDict[this.selectedNode]
+      );
+      this.worker.postMessage({
+        question: "prob mod",
+        value: [this.selectedNode, this.probDict[this.selectedNode]],
+      });
+    },
     initWorker() {
       for (const interval of this.intervals) {
         window.clearInterval(interval);
@@ -606,7 +698,7 @@ export default defineComponent({
       return range(0, x);
     },
     print(t) {
-      console.log(t);
+      console.log("PRINTING", t);
     },
     redo() {
       this.worker.postMessage({
@@ -823,7 +915,7 @@ export default defineComponent({
 
       // Build tile tree
       const treeNodeArray = [];
-      console.log("exp", this.expanded);
+      // console.log("exp", this.expanded);
 
       for (const n in nodes) {
         const nodeIndex = invertedIndex[n];
@@ -836,21 +928,45 @@ export default defineComponent({
         treeNodeArray.push(treeNode);
       }
 
-      for (const tn of treeNodeArray) {
-        const node = nodeArray[tn.key];
-        const treeNode = treeNodeArray[tn.key];
-        treeNode.children = [];
-        for (const childName in node.children) {
-          if (treeNodeArray[invertedIndex[childName]].paintable) {
-            treeNode.children.push(treeNodeArray[invertedIndex[childName]]);
+      const root = treeNodeArray[invertedIndex["root"]];
+      root.domKey = "|0";
+      const memory = {};
+      memory[root.domKey] = root;
+      const queue = [root.domKey];
+
+      while (queue.length > 0) {
+        const nextIndex = queue.pop();
+        const nextTreeNode = memory[nextIndex];
+        const node = nodeArray[nextTreeNode.key];
+        if (!node.paintable) {
+          continue;
+        }
+        nextTreeNode.children = [];
+        for (const c in node.children) {
+          const edge = `${nextTreeNode.key}|${invertedIndex[c]}`;
+          let child = Object.assign({}, treeNodeArray[invertedIndex[c]]);
+          if (!child.paintable) {
+            continue;
           }
+
+          if (edge in memory) {
+            child = memory[edge];
+          } else {
+            child.domKey = edge;
+            this.probDict[edge] = 1;
+          }
+
+          memory[edge] = child;
+          nextTreeNode.children.push(child);
+          queue.push(edge);
         }
       }
 
-      this.tileTree = [treeNodeArray[invertedIndex["root"]]];
-      this.expanded.push(this.tileTree[0].key);
+      this.tileTree = [root];
+
+      this.expanded.push(this.tileTree[0].domKey);
       this.tileTree[0].children.forEach((c) => {
-        this.expanded.push(c.key);
+        this.expanded.push(c.domKey);
       });
 
       // console.log(nodeIndex);
@@ -1186,6 +1302,8 @@ export default defineComponent({
         new URL("../assets/default.png", import.meta.url).href
       );
     }
+
+    // TODO: Doesn't work at all...
     window.addEventListener("load", function () {
       // Set a timeout...
       setTimeout(function () {
@@ -1193,9 +1311,6 @@ export default defineComponent({
         window.scrollTo(0, 1);
       }, 0);
     });
-    this.setStepSize();
-
-    console.log("MOUNTED");
   },
 });
 </script>

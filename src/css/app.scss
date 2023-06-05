@@ -81,7 +81,66 @@ canvas {
   // cursor: crosshair;
 }
 .selectedtree {
-  color: $dark;
+  color: $yellow-8;
+}
+
+.prb0:after {
+  content: "";
+  background-image: url("/minusminus.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100%;
+  position: absolute;
+  width: 48px;
+  height: 16px;
+  right: 0px;
+}
+.prb1:after {
+  content: "";
+  background-image: url("/minus.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100%;
+  position: absolute;
+  width: 48px;
+  height: 16px;
+  right: 0px;
+}
+
+.prb2:after {
+  content: "";
+  background-image: url("/neutral.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100%;
+  position: absolute;
+  width: 48px;
+  height: 16px;
+  right: 0px;
+}
+
+.prb3:after {
+  content: "";
+  background-image: url("/plus.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100%;
+  position: absolute;
+  width: 48px;
+  height: 16px;
+  right: 0px;
+}
+
+.prb4:after {
+  content: "";
+  background-image: url("/plusplus.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100%;
+  position: absolute;
+  width: 48px;
+  height: 16px;
+  right: 0px;
 }
 
 html,
