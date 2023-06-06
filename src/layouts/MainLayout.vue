@@ -1421,6 +1421,7 @@ export default defineComponent({
         new URL("../assets/default.png", import.meta.url).href
       );
     }
+    this.setStepSize();
 
     // TODO: Doesn't work at all...
     window.addEventListener("load", function () {
