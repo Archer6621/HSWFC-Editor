@@ -521,7 +521,7 @@
       </q-btn> -->
         <!-- TODO: does not play nicely with 90deg transform -->
         <q-icon name="bolt" size="3vh" />
-        <q-toolbar-title style="font-size: 3vh"> HSWFC Editor </q-toolbar-title>
+        <q-toolbar-title style="font-size: 3vh"> WFC Editor </q-toolbar-title>
         <!-- <q-btn flat round dense>
         <q-icon name="more_vert" />
       </q-btn> -->
@@ -1107,7 +1107,7 @@ export default defineComponent({
         .sort((a, b) => a.key - b.key);
 
       // Make names non-bad for default tileset
-      for (const n of treeNodeArray) {
+      for (const n of leaves) {
         switch (n.label) {
           case "root":
             n.label = "Eraser";
