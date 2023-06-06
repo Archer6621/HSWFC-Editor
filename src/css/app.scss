@@ -101,63 +101,37 @@ canvas {
   color: $yellow-10;
 }
 
-.prb0:after {
+.prb:after {
   content: "";
-  background-image: url("/minusminus.svg");
   background-position: center;
   background-repeat: no-repeat;
-  background-size: 100%;
+  background-size: 90%;
   position: absolute;
   width: 48px;
   height: 16px;
+  bottom: 10px;
+  left: 0px;
   right: 0px;
+  margin: auto;
+}
+
+.prb0:after {
+  background-image: url("/minusminus.svg");
 }
 .prb1:after {
-  content: "";
   background-image: url("/minus.svg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100%;
-  position: absolute;
-  width: 48px;
-  height: 16px;
-  right: 0px;
 }
 
 .prb2:after {
-  content: "";
   background-image: url("/neutral.svg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100%;
-  position: absolute;
-  width: 48px;
-  height: 16px;
-  right: 0px;
 }
 
 .prb3:after {
-  content: "";
   background-image: url("/plus.svg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100%;
-  position: absolute;
-  width: 48px;
-  height: 16px;
-  right: 0px;
 }
 
 .prb4:after {
-  content: "";
   background-image: url("/plusplus.svg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100%;
-  position: absolute;
-  width: 48px;
-  height: 16px;
-  right: 0px;
 }
 
 html,

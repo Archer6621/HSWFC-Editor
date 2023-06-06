@@ -27,6 +27,16 @@
             :key="node.value"
             v-slot:[node.value]
           >
+            <div
+              class="row items-center prb"
+              v-bind:class="{
+                prb0: this.probDict[node.domKey] === this.probMods[0].value,
+                prb1: this.probDict[node.domKey] === this.probMods[1].value,
+                prb2: this.probDict[node.domKey] === this.probMods[2].value,
+                prb3: this.probDict[node.domKey] === this.probMods[3].value,
+                prb4: this.probDict[node.domKey] === this.probMods[4].value,
+              }"
+            ></div>
             <q-tooltip class="bg-primary text-body2">{{ node.name }}</q-tooltip>
           </template>
         </q-btn-toggle>
@@ -199,7 +209,7 @@
             />
           </q-item-section>
         </q-item>
-        <!-- <q-item>
+        <q-item>
           <q-item-section>
             <q-item-label class="q-py-sm">
               <b
@@ -225,7 +235,7 @@
               "
             />
           </q-item-section>
-        </q-item> -->
+        </q-item>
 
         <q-item>
           <q-item-label class="q-pt-md">
@@ -639,6 +649,7 @@ export default defineComponent({
       paintMat: undefined,
       probDict: {},
       leafNodes: [],
+      nodeInstances: {},
       probMods: [
         {
           icon: "img:density_least.svg",
@@ -714,16 +725,15 @@ export default defineComponent({
 
   methods: {
     setProbMod() {
-      console.log(
-        "SETTING PROB MOD",
-        this.selectedNode,
-        "to",
-        this.probDict[this.selectedNode]
-      );
-      this.worker.postMessage({
-        question: "prob mod",
-        value: [this.selectedNode, this.probDict[this.selectedNode]],
-      });
+      for (const i of this.nodeInstances[
+        parseInt(this.selectedNode.split("|")[1])
+      ]) {
+        console.log("SETTING PROB MOD FOR: ", i);
+        this.worker.postMessage({
+          question: "prob mod",
+          value: [i.domKey, this.probDict[this.selectedNode]],
+        });
+      }
     },
     initWorker() {
       for (const interval of this.intervals) {
@@ -1035,6 +1045,8 @@ export default defineComponent({
 
       for (const n in nodes) {
         const nodeIndex = invertedIndex[n];
+        this.nodeInstances[nodeIndex] = [];
+
         const node = nodeArray[nodeIndex];
         const treeNode = {};
         treeNode.color = node.color;
@@ -1049,21 +1061,21 @@ export default defineComponent({
       const memory = {};
       memory[root.domKey] = root;
       const queue = [root.domKey];
-
+      const unique = [];
       while (queue.length > 0) {
         const nextIndex = queue.pop();
         const nextTreeNode = memory[nextIndex];
         const node = nodeArray[nextTreeNode.key];
-        if (!node.paintable) {
-          continue;
-        }
+        // if (!node.paintable) {
+        //   continue;
+        // }
         nextTreeNode.children = [];
         for (const c in node.children) {
           const edge = `${nextTreeNode.key}|${invertedIndex[c]}`;
           let child = Object.assign({}, treeNodeArray[invertedIndex[c]]);
-          if (!child.paintable) {
-            continue;
-          }
+          // if (!child.paintable) {
+          //   continue;
+          // }
 
           if (edge in memory) {
             child = memory[edge];
@@ -1073,21 +1085,26 @@ export default defineComponent({
           }
 
           memory[edge] = child;
+          if (!unique.find((c) => c.key === child.key)) {
+            unique.push(child);
+          }
           nextTreeNode.children.push(child);
+          this.nodeInstances[child.key].push(child);
           queue.push(edge);
         }
       }
 
       this.tileTree = [root];
-
+      console.log(unique);
       // Stupid easy way to flatten tree
-      let leaves = treeNodeArray
+      let leaves = unique
         .filter((n) => Object.keys(nodeArray[n.key].children).length === 0)
         .map((n) => {
-          n.domKey = `0|${n.key}`;
+          // n.domKey = `0|${n.key}`;
           n.icon = `img:${this.tiles[n.key].img.src}`;
           return n;
-        });
+        })
+        .sort((a, b) => a.key - b.key);
 
       // Make names non-bad for default tileset
       for (const n of treeNodeArray) {

@@ -4,7 +4,7 @@
       "paintable": true,
       "generate": true,
       "color": [0, 0, 0],
-      "children": { "water": 0.1, "land": 1, "village": 0.00000001 },
+      "children": { "water": 0.1, "land": 1, "village": 0.01 },
       "adjacencies": {
         "U": ["root"],
         "D": ["root"],
