@@ -13,74 +13,47 @@
 
       <q-separator style="height: 1px; width: 100%" vertical inset />
       <div class="q-pa-md q-gutter-sm" style="overflow-y: auto; flex: 0 1 auto">
-        <q-tree
-          :nodes="tileTree"
-          ref="tree"
-          default-expand-all
-          v-model:selected="selectedNode"
-          :duration="50"
-          v-model:expanded="expanded"
-          node-key="domKey"
-          @click="
-            (e) => {
-              resetFocus();
-            }
-          "
-          @update:selected="
-            (t) => {
-              if (t) {
-                this.lastSelectednode = t;
-              } else {
-                this.selectedNode = this.lastSelectednode;
-              }
-            }
-          "
-          @update:expanded="resetFocus"
+        <q-btn-toggle
+          v-model="this.selectedNode"
+          unelevated
+          size="xl"
+          toggle-color="blue-3"
+          :options="this.leafNodes"
+          style="flex-wrap: wrap"
+          @click="resetFocus"
         >
-          <template v-slot:default-header="prop">
-            <div
-              class="row items-center"
-              v-bind:class="{
-                selectedtree: prop.tree.selected === prop.node.domKey,
-                prb0:
-                  this.probDict[prop.node.domKey] === this.probMods[0].value,
-                prb1:
-                  this.probDict[prop.node.domKey] === this.probMods[1].value,
-                prb2:
-                  this.probDict[prop.node.domKey] === this.probMods[2].value,
-                prb3:
-                  this.probDict[prop.node.domKey] === this.probMods[3].value,
-                prb4:
-                  this.probDict[prop.node.domKey] === this.probMods[4].value,
-              }"
-            >
-              <!-- () -->
-              <!-- {{ this.print(this) }} -->
-              <!-- {{ prop }} -->
-              <!-- <q-icon
-                    name="square"
-                    left
-                    :style="`color: rgb(${prop.node.color[0]}, ${prop.node.color[1]}, ${prop.node.color[2]})`"
-                  ></q-icon> -->
-              <!-- :ref="
-                (el) =>
-                  `vla`
-              " -->
-              <q-img
-                style="margin-right: 8px"
-                width="24px"
-                height="24px"
-                :src="this.tiles[prop.node.key]?.img?.src"
-              />
-              <div class="text-weight-bold unselectable">
-                {{ prop.node.label }}
-                <!-- {{  ? ">" : "" }} -->
-                <!-- {{ print(prop) }} -->
-                <!-- {{ prop }} -->
-              </div>
-            </div>
+          <template
+            v-for="node in this.leafNodes"
+            :key="node.value"
+            v-slot:[node.value]
+          >
+            <q-tooltip class="bg-primary text-body2">{{ node.name }}</q-tooltip>
           </template>
-        </q-tree>
+        </q-btn-toggle>
+      </div>
+      <q-separator style="height: 1px; width: 100%" vertical inset />
+      <div class="q-mx-md q-mt-sm" style="flex: 0 1 auto; max-height: 2em">
+        <b
+          class="text-uppercase text-h6 text-weight-bold"
+          title="The tiles that
+          can be painted with"
+        >
+          Tools</b
+        >
+      </div>
+
+      <div class="q-pa-md q-gutter-sm" style="overflow-y: auto; flex: 0 1 auto">
+        <q-btn-toggle
+          toggle-color="blue-3"
+          v-model="this.selectedNode"
+          unelevated
+          size="xl"
+          :options="[{ value: '|0', icon: 'fa-solid fa-eraser' }]"
+          style="flex-wrap: wrap"
+          @click="resetFocus"
+        >
+          <q-tooltip class="bg-primary text-body2">Eraser</q-tooltip>
+        </q-btn-toggle>
       </div>
     </div>
 
@@ -226,7 +199,7 @@
             />
           </q-item-section>
         </q-item>
-        <q-item>
+        <!-- <q-item>
           <q-item-section>
             <q-item-label class="q-py-sm">
               <b
@@ -252,7 +225,7 @@
               "
             />
           </q-item-section>
-        </q-item>
+        </q-item> -->
 
         <q-item>
           <q-item-label class="q-pt-md">
@@ -479,7 +452,7 @@
             }
           "
         />
-        <q-btn
+        <!-- <q-btn
           title="Reset areas that came from the tile selected in the hierarchy"
           color="white"
           class="q-mx-xs"
@@ -493,7 +466,7 @@
               resetFocus();
             }
           "
-        />
+        /> -->
         <q-btn
           title="Download an image of the canvas"
           color="white"
@@ -577,25 +550,17 @@
               : "n/a"
           }}
         </q-badge>
-        <q-badge v-show="false" transparent :align="'middle'">
-          <!-- lmao -->
+
+        <q-badge v-show="true" transparent :align="'middle'">
           choices:
-          {{
-            //  Formula: c + C * y + C * Y * x
-            this.mx >= 0 &&
-            this.mx < this.width &&
-            this.my >= 0 &&
-            this.my < this.height
-              ? this.grid?.nameIndex?.filter(
-                  (n) =>
-                    this.grid?.choices?.[
-                      this.grid?.invertedIndex[n] +
-                        this.grid?.nameIndex.length * this.my +
-                        this.grid?.nameIndex.length * this.height * this.mx
-                    ]
-                )
-              : []
-          }}
+
+          <img
+            class="q-mx-xs"
+            style="height: 16px"
+            v-for="c of this.tile_choices"
+            :key="c"
+            :src="c"
+          />
         </q-badge>
       </q-bar>
     </div>
@@ -673,6 +638,7 @@ export default defineComponent({
       workerData: {},
       paintMat: undefined,
       probDict: {},
+      leafNodes: [],
       probMods: [
         {
           icon: "img:density_least.svg",
@@ -708,6 +674,31 @@ export default defineComponent({
     },
     tile_index() {
       return parseInt(this.selectedNode.split("|")[1]);
+    },
+    tile_choices() {
+      const c = [];
+
+      if (
+        this.mx >= 0 &&
+        this.mx < this.width &&
+        this.my >= 0 &&
+        this.my < this.height
+      ) {
+        for (let i = 0; i < this.tiles.length; i++) {
+          c.push(
+            this.grid?.choices?.[
+              i +
+                this.grid?.nameIndex.length * this.my +
+                this.grid?.nameIndex.length * this.height * this.mx
+            ]
+          );
+        }
+      }
+      return c
+        .map((v, u) => (v === 1 ? u : -1))
+        .filter((v) => v !== -1)
+        .filter((i) => !this.tiles[i].hasChildren)
+        .map((i) => this.tiles[i].img.src);
     },
   },
   setup() {
@@ -1010,7 +1001,13 @@ export default defineComponent({
         invertedIndex[n] = i;
         nodeArray.push(nodes[n]);
         const node = nodes[n];
-        const tile = { slot: n, color: node.color, value: i };
+        console.log(node.children);
+        const tile = {
+          slot: n,
+          color: node.color,
+          value: i,
+          hasChildren: Object.keys(node.children).length > 0,
+        };
 
         tile.img = new Image();
         tile.img.src = new URL(
@@ -1082,6 +1079,86 @@ export default defineComponent({
       }
 
       this.tileTree = [root];
+
+      // Stupid easy way to flatten tree
+      let leaves = treeNodeArray
+        .filter((n) => Object.keys(nodeArray[n.key].children).length === 0)
+        .map((n) => {
+          n.domKey = `0|${n.key}`;
+          n.icon = `img:${this.tiles[n.key].img.src}`;
+          return n;
+        });
+
+      // Make names non-bad for default tileset
+      for (const n of treeNodeArray) {
+        switch (n.label) {
+          case "root":
+            n.label = "Eraser";
+            break;
+          case "tree":
+            n.label = "Tree";
+            break;
+          case "grass":
+            n.label = "Grass";
+            break;
+          case "sand":
+            n.label = "Sand";
+            break;
+          case "water":
+            n.label = "Water";
+            break;
+          case "floor":
+            n.label = "Floor";
+            break;
+          case "wHT":
+            n.label = "Horizontal Top Wall";
+            break;
+          case "wHB":
+            n.label = "Horizontal Bottom Wall";
+            break;
+          case "wVL":
+            n.label = "Vertical Left Wall";
+            break;
+          case "wVR":
+            n.label = "Vertical Right Wall";
+            break;
+          case "cTL":
+            n.label = "Top Left Outer Corner Wall";
+            break;
+          case "cBL":
+            n.label = "Bottom Left Outer Corner Wall";
+            break;
+          case "cTR":
+            n.label = "Top Right Outer Corner Wall";
+            break;
+          case "cBR":
+            n.label = "Bottom Right Outer Corner Wall";
+            break;
+          case "icTL":
+            n.label = "Top Left Inner Corner Wall";
+            break;
+          case "icBL":
+            n.label = "Bottom Left Inner Corner Wall";
+            break;
+          case "icTR":
+            n.label = "Top Right Inner Corner Wall";
+            break;
+          case "icBR":
+            n.label = "Bottom Right Inner Corner Wall";
+            break;
+        }
+      }
+
+      leaves = leaves.map((n) => {
+        n.name = n.label;
+        n.label = "";
+        n.slot = n.domKey;
+        n.value = n.domKey;
+        return n;
+      });
+
+      this.leafNodes = leaves;
+      root.children = leaves;
 
       this.expanded.push(this.tileTree[0].domKey);
       this.tileTree[0].children.forEach((c) => {
