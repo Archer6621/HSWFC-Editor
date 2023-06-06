@@ -1159,6 +1159,7 @@ export default defineComponent({
 
       this.leafNodes = leaves;
       root.children = leaves;
+      this.selectedNode = this.leafNodes[1]?.domKey; // Don't select the eraser by default
 
       this.expanded.push(this.tileTree[0].domKey);
       this.tileTree[0].children.forEach((c) => {
