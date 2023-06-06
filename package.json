@@ -9,7 +9,9 @@
     "lint": "eslint --ext .js,.vue ./",
     "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
     "test": "echo \"No test specified\" && exit 0",
-    "deploy": "push-dir --dir=dist/spa --remote=gh-pages --branch=gh-pages"
+    "deploy": "push-dir --dir=dist/spa --remote=gh-pages --branch=gh-pages",
+    "deploy-b": "push-dir --dir=dist/spa --remote=gh-pages-b --branch=gh-pages",
+    "deploy-a": "push-dir --dir=dist/spa --remote=gh-pages-a --branch=gh-pages"
   },
   "dependencies": {
     "@blakeembrey/deque": "^1.0.5",
