@@ -16,7 +16,7 @@
       "paintable": true,
       "generate": true,
       "color": [100, 230, 100],
-      "children": { "grass": 1, "tree": 1 },
+      "children": { "grass": 1, "tree": 0.33 },
       "adjacencies": {
         "U": ["forest"],
         "D": ["forest"],
