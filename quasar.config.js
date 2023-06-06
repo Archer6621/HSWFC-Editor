@@ -53,6 +53,9 @@ module.exports = configure(function (/* ctx */) {
         browser: ["es2019", "edge88", "firefox78", "chrome87", "safari13.1"],
         node: "node16",
       },
+      extendViteConf(viteConf, { isServer, isClient }) {
+        viteConf.base = "";
+      },
 
       vueRouterMode: "hash", // available values: 'hash', 'history'
       // vueRouterBase,
@@ -61,7 +64,7 @@ module.exports = configure(function (/* ctx */) {
 
       // rebuildCache: true, // rebuilds Vite/linter/etc cache on startup
 
-      publicPath: "/hswfc-editor-dev",
+      publicPath: ".",
       // analyze: true,
       // env: {},
       rawDefine: {},
