@@ -26,6 +26,15 @@
               resetFocus();
             }
           "
+          @update:selected="
+            (t) => {
+              if (t) {
+                this.lastSelectednode = t;
+              } else {
+                this.selectedNode = this.lastSelectednode;
+              }
+            }
+          "
           @update:expanded="resetFocus"
         >
           <template v-slot:default-header="prop">
@@ -63,7 +72,7 @@
                 height="24px"
                 :src="this.tiles[prop.node.key]?.img?.src"
               />
-              <div class="text-weight-bold">
+              <div class="text-weight-bold unselectable">
                 {{ prop.node.label }}
                 <!-- {{  ? ">" : "" }} -->
                 <!-- {{ print(prop) }} -->
@@ -110,25 +119,27 @@
         class="q-pa-md q-gutter-sm"
         style="overflow-y: auto; overflow-x: auto; flex: 0 1 auto"
       >
-        <q-item>
+        <q-item dense>
           <q-checkbox
             title="Shows the entropy of the grid overlaid over the tiles"
             size="md"
             v-model="debug"
             val="md"
+            dense
             label="Show Entropy"
             class="row"
             @click="resetFocus"
           />
         </q-item>
 
-        <q-item>
+        <q-item dense>
           <span class="row">
             <q-input
               v-model.number="this.width"
               style="min-width: 48px"
               type="number"
               filled
+              dense
               label="width"
               class="q-mr-xs q-my-xs col"
               @update:model-value="
@@ -143,6 +154,7 @@
               type="number"
               style="min-width: 48px"
               filled
+              dense
               label="height"
               class="q-mr-xs q-my-xs col"
               @update:model-value="
@@ -187,12 +199,12 @@
             <q-item-label class="q-py-sm">
               <b
                 class="text-uppercase"
-                title="Speed at which the automatic generator runs"
+                title="Speed at which the generator runs"
                 >Generation Speed</b
               >
             </q-item-label>
             <q-btn-toggle
-              title="Speed at which the automatic generator runs"
+              title="Speed at which the generator runs"
               spread
               v-model="stepSize"
               style="max-width: 100%"
@@ -219,12 +231,12 @@
             <q-item-label class="q-py-sm">
               <b
                 class="text-uppercase"
-                title="Probability that the tile selected in the hierarchy will be chosen"
+                title="Modify how often the selected tile in the hierarchy will be chosen"
                 >Tile Probability</b
               >
             </q-item-label>
             <q-btn-toggle
-              title="Probability that the tile selected in the hierarchy will be chosen"
+              title="Modify how often the selected tile in the hierarchy will be chosen"
               spread
               v-model="this.probDict[this.selectedNode]"
               style="max-width: 100%"
@@ -243,27 +255,33 @@
         </q-item>
 
         <q-item>
-          <q-item-label class="q-py-sm">
+          <q-item-label class="q-pt-md">
             <b
               class="text-uppercase"
-              title="Probability that the tile selected in the hierarchy will be chosen"
-              >Tile Probability</b
+              title="Save and load snapshots of the canvas"
+              >Snapshots</b
             >
           </q-item-label>
         </q-item>
-        <q-item v-for="(url, index) in this.imageUrl" :key="index">
-          <q-card class="q-ma-sm" :style="`width: 70%`">
+        <q-item
+          class="q-ma-none q-pa-none"
+          v-for="(url, index) in this.imageUrl"
+          :key="index"
+        >
+          <q-card class="q-ma-sm">
             <q-card-section horizontal class="row items-center q-pb-none">
-              <q-img
-                :style="`aspect-ratio: ${this.aspect(true)}/ ${this.aspect()};`"
+              <img
+                :style="`aspect-ratio: ${this.aspect(
+                  true
+                )}/ ${this.aspect()}; `"
+                class="snapshotImage"
                 @click="
                   {
                     imagePopup[index] = true;
                   }
                 "
                 :src="url"
-              >
-              </q-img>
+              />
 
               <q-dialog v-model="imagePopup[index]">
                 <q-card style="width: 30%; max-width: 30%">
@@ -287,6 +305,7 @@
                     <q-card-actions align="around">
                       <q-btn
                         style="width: 100px; height: 32px"
+                        title="Load snapshot"
                         class="q-mx-xs"
                         size="md"
                         icon="upload"
@@ -303,50 +322,13 @@
                     </q-card-actions>
                   </q-card-section>
                 </q-card>
-                <!-- <q-card>
-                  <q-card-section class="row items-center q-pb-none">
-                    <q-space />
-                    <q-btn icon="close" flat round dense v-close-popup />
-                  </q-card-section>
-
-                  <q-card-section>
-                    <q-img
-                      style="image-rendering: pixelated; width: 800px"
-                      @click="
-                        {
-                          imagePopup[index] = true;
-                        }
-                      "
-                      :src="url"
-                    >
-                    </q-img>
-                  </q-card-section>
-                  <q-card-section>
-                    <q-card-actions align="around">
-                      <q-btn
-                        style="width: 100px; height: 32px"
-                        class="q-mx-xs"
-                        size="md"
-                        icon="upload"
-                        color="white"
-                        @click="
-                          () => {
-                            loadSnapshot(index);
-                            resetFocus();
-                            imagePopup[index] = false;
-                          }
-                        "
-                        text-color="black"
-                      ></q-btn>
-                    </q-card-actions>
-                  </q-card-section>
-                </q-card> -->
               </q-dialog>
 
               <q-card-actions vertical align="around">
                 <q-btn
-                  style="width: 24px; height: 16px"
-                  class="q-mb-sm"
+                  style="width: 24px; min-height: 0px; height: 24px"
+                  title="Load snapshot"
+                  class="q-mb-md"
                   size="md"
                   icon="arrow_right"
                   color="white"
@@ -359,8 +341,9 @@
                   text-color="black"
                 ></q-btn>
                 <q-btn
-                  style="width: 24px; height: 16px"
-                  class="q-mt-sm"
+                  style="width: 24px; min-height: 0px; height: 24px"
+                  title="Save snapshot"
+                  class="q-mt-md"
                   size="md"
                   icon="arrow_left"
                   color="white"
@@ -405,7 +388,7 @@
       <!-- <b class="text-uppercase">Controls</b> -->
       <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn-toggle
-          title="Pauses or resumes the generator, based on the configured generation speed [Space]"
+          title="Pause or resume generation [Space]"
           tabindex="-1"
           v-model="autoCollapse"
           toggle-color="primary"
@@ -431,7 +414,7 @@
 
       <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn
-          title="Solve for one step, which is sized according to the set solve speed [Right Arrow]"
+          title="Generate one step sized according to the set generation speed [Right Arrow]"
           color="white"
           style="flex-grow: 1; min-width: 0"
           text-color="black"
@@ -482,7 +465,7 @@
 
       <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
         <q-btn
-          title="Reset the grid completely [R]"
+          title="Reset the canvas completely [R]"
           color="white"
           class="q-mx-xs"
           text-color="black"
@@ -497,7 +480,7 @@
           "
         />
         <q-btn
-          title="Regenerate areas that came from the currently selected tile"
+          title="Reset areas that came from the tile selected in the hierarchy"
           color="white"
           class="q-mx-xs"
           text-color="black"
@@ -666,6 +649,7 @@ export default defineComponent({
       autoCollapse: false,
       debug: false,
       selectedNode: "|0",
+      lastSelectednode: "|0",
       worker: undefined,
       tool: 0,
       tiles: [],
@@ -677,7 +661,7 @@ export default defineComponent({
       expanded: [],
       canRedo: false,
       canUndo: false,
-      snapshotCount: 2,
+      snapshotCount: 3,
       imageUrl: [],
       imagePopup: [],
       paintBuffer: [],
