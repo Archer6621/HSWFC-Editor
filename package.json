@@ -9,7 +9,9 @@
     "lint": "eslint --ext .js,.vue ./",
     "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
     "test": "echo \"No test specified\" && exit 0",
-    "deploy": "push-dir --dir=dist/spa --remote=gh-pages --branch=gh-pages"
+    "deploy": "push-dir --dir=dist/spa --remote=gh-pages --branch=gh-pages",
+    "deploy-b": "push-dir --dir=dist/spa --remote=gh-pages-b --branch=gh-pages",
+    "deploy-a": "push-dir --dir=dist/spa --remote=gh-pages-a --branch=gh-pages"
   },
   "dependencies": {
     "@blakeembrey/deque": "^1.0.5",
@@ -18,6 +20,7 @@
     "collections": "^5.1.13",
     "denque": "^2.1.0",
     "double-ended-queue": "^2.1.0-0",
+    "eigen": "https://github.com/Archer6621/eigen-js",
     "hue-map": "^1.0.0",
     "immutable": "^4.2.4",
     "mathjs": "11.7.0",
@@ -41,7 +44,8 @@
     "eslint-plugin-vue": "^9.0.0",
     "postcss": "^8.4.14",
     "prettier": "^2.5.1",
-    "push-dir": "^0.4.1"
+    "push-dir": "^0.4.1",
+    "rollup-plugin-node-builtins": "^2.1.2"
   },
   "engines": {
     "node": "^18 || ^16 || ^14.19",

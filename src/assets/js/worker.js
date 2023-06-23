@@ -1,88 +1,107 @@
 import { Grid } from "./HSWFC.js";
 
 let grid;
-const batchSize = 256;
 let autoStepSize = 1;
-let lock = false;
 
-self.onmessage = ({ data: { question, value } }) => {
+self.onmessage = ({ data: { question, value, cells } }) => {
   if (question === "init") {
     const width = value[0];
-    const tileset = value[1];
-    const adjacencies = value[2];
-    const index = value[3];
+    const height = value[1];
+    const tileset = value[2];
+    const adjacencies = value[3];
+    const index = value[4];
 
-    grid = new Grid(width, tileset, adjacencies, index, autoStepSize);
-    self.postMessage({
-      grid: grid.getState(),
-      message: "doneInit",
+    grid = new Grid(width, height, tileset, adjacencies, index, autoStepSize);
+
+    grid.initialize().then(() => {
+      self.postMessage({
+        grid: grid.getState(),
+        message: "doneInit",
+      });
     });
   } else if (question === "update") {
-    for (let i = 0; i < batchSize; i++) {
-      grid.update();
-    }
+    const modifiedCells = grid.update();
     self.postMessage({
       grid: {
         ...grid.getState(),
         canRedo: grid.redoStack.length > 0,
         canUndo: grid.undoStack.length > 0,
+        modifiedCells: modifiedCells,
       },
       message: "doneUpdate",
     });
-  } else if (question === "manual") {
-    const x = value[1];
-    const y = value[0];
-    const tileIndex = value[2];
-    const markerSize = value[3];
+  } else if (question === "paint") {
+    const tileIndex = value[0];
+    const coordinates = cells.flatMap((_, i, a) =>
+      i % 2 ? [] : [a.slice(i, i + 2)]
+    );
+    grid.paintEnqueue(coordinates, tileIndex);
 
-    for (
-      let i = Math.floor(x - markerSize / 2) + 1;
-      i < Math.floor(x + markerSize / 2) + 1;
-      i++
-    ) {
-      for (
-        let j = Math.floor(y - markerSize / 2) + 1;
-        j < Math.floor(y + markerSize / 2) + 1;
-        j++
-      ) {
-        if (i >= 0 && i < grid.gridSize && j >= 0 && j < grid.gridSize) {
-          grid.manualCollapse(i, j, tileIndex);
-        }
-      }
-    }
+    // grid.manualCollapse(x, y, markerSize, tileIndex);
   } else if (question === "auto") {
-    if (!lock) {
-      grid.autoCollapse(autoStepSize);
+    if (!grid.lock) {
+      grid.autoEnqueue(autoStepSize);
     }
     self.postMessage({ grid: grid.getState(), message: "doneAuto" });
   } else if (question === "clear") {
     // console.log("Clearing");
-    grid.clearQueue();
+    // grid.clearQueue();
   } else if (question === "reset") {
-    grid.initialize();
+    grid.initialize().then(() => {
+      self.postMessage({
+        grid: grid.getState(),
+        message: "redraw",
+      });
+    });
   } else if (question === "undo") {
     grid.undo();
+    self.postMessage({
+      grid: grid.getState(),
+      message: "redraw",
+    });
   } else if (question === "redo") {
     grid.redo();
+    self.postMessage({
+      grid: grid.getState(),
+      message: "redraw",
+    });
   } else if (question === "checkpoint") {
     grid.checkpoint();
   } else if (question === "step") {
     autoStepSize = value;
   } else if (question === "onestep") {
     if (value) {
-      grid.autoCollapse(value);
+      grid.autoEnqueue(value);
     } else {
-      grid.autoCollapse(autoStepSize);
+      grid.autoEnqueue(autoStepSize * autoStepSize);
     }
-    grid.update();
+
     self.postMessage({ grid: grid.getState(), message: "doneStep" });
   } else if (question === "lock") {
-    lock = true;
+    grid.lock = true;
   } else if (question === "unlock") {
-    lock = false;
+    grid.lock = false;
   } else if (question === "snapshot") {
     grid.snapshot(value);
   } else if (question === "load snapshot") {
     grid.loadSnapshot(value);
+    self.postMessage({
+      grid: grid.getState(),
+      message: "redraw",
+    });
+  } else if (question === "collapse path regen") {
+    const tileIndex = value[0];
+
+    cells = grid.collapsePathEnqueue(tileIndex);
+    self.postMessage({
+      grid: grid.getState(),
+      message: "process",
+      other: cells,
+    });
+  } else if (question === "prob mod") {
+    const edgeIndex = value[0];
+
+    const modifier = value[1];
+    grid.setMod(edgeIndex, modifier);
   }
 };

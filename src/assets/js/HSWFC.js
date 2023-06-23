@@ -14,6 +14,7 @@ import {
   or,
   clone,
   random,
+  not,
   xor,
   reshape,
   sqrt,
@@ -30,6 +31,8 @@ import {
   isUndefined,
   forEach,
 } from "mathjs";
+import "./init";
+import eig from "eigen";
 
 import { Deque } from "@blakeembrey/deque";
 import { Map, Set } from "immutable";
@@ -40,6 +43,9 @@ import { createPalette } from "hue-map";
 // import BTree from "sorted-btree";
 // import { SoMap, SoSet } from "somap";
 // import * as ProperSkipList from "proper-skip-list";
+
+import { MinPriorityQueue } from "@datastructures-js/priority-queue";
+
 import Z from "redis-sorted-set";
 const SortedSet = Z;
 // class QTNode {
@@ -219,13 +225,26 @@ const SortedSet = Z;
 // }
 
 class Target {
-  constructor(x, y) {
+  constructor(x, y, tile_index = -1, mode = 0) {
     this.x = x;
     this.y = y;
+    this.tile_index = tile_index;
+    this.mode = mode;
   }
 
   equals(other) {
-    return this.x === other.x && this.y === other.y;
+    return (
+      this.x === other.x &&
+      this.y === other.y &&
+      this.tile_index === other.tile_index
+    );
+  }
+}
+
+class Job {
+  constructor(type, targets) {
+    this.type = type;
+    this.targets = targets;
   }
 }
 
@@ -283,11 +302,19 @@ class Node {
     return this;
   }
 
-  getDepth(d) {
+  ancestors() {
+    let s = new Set([this]);
     for (const parent of this.incoming.keys()) {
-      return parent.getDepth(d + 1);
+      s = s.add(parent).union(parent.ancestors());
     }
-    return d;
+    return s;
+  }
+
+  commonAncestor(node) {
+    const common = this.ancestors().intersect(node.ancestors());
+    const max = common.maxBy((n) => n.depth);
+    const maxn = common.filter((n) => n.depth === max.depth);
+    return maxn.max((n) => n.leaves().size);
   }
 
   leaves() {
@@ -307,61 +334,84 @@ class Node {
 class Edge {
   constructor(weight) {
     this.weight = weight;
+    this.mod = 1;
   }
 }
 
 class GridState {
-  constructor(choices, chosen, entropy, painted) {
+  constructor(choices, chosen, entropy, painted, collapsePaths) {
     this.index = GridState.i++;
-    this.choices = clone(choices);
+    this.choices = new Uint8Array(choices);
     this.chosen = clone(chosen);
     this.entropy = clone(entropy);
     this.painted = clone(painted);
+    this.collapsePaths = clone(collapsePaths);
   }
 }
 GridState.i = 0;
 
 export class Grid {
-  constructor(gridSize, tileset, adjacencies, invertedIndex, bufferSize) {
+  constructor(
+    gridWidth,
+    gridHeight,
+    tileset,
+    adjacencies,
+    invertedIndex,
+    bufferSize
+  ) {
     this.entropyBufferSize = bufferSize;
+    this.paintBuffer = [];
     this.snapshots = {};
     this.undoStack = [];
     this.redoStack = [];
     this.current = null;
     this.counter = 0;
-    this.collapseQueue = new Deque();
     this.gridChoices = Object.keys(tileset).length;
-    this.gridSize = gridSize;
+    this.lock = false;
+    this.gridWidth = gridWidth;
+    this.gridHeight = gridHeight;
     this.tileset = tileset;
+
+    this.jobQueue = new MinPriorityQueue((job) => job.type);
+
     this.ALL = range(0, this.gridChoices);
+    this.WIDTH = range(0, this.gridWidth);
+    this.HEIGHT = range(0, this.gridHeight);
     this.COLOR = range(0, 4);
+
     this.entropyColors = createPalette({
       map: "autumn",
       steps: this.gridChoices,
     }).format("rgba");
     console.log(this.entropyColors);
-    this.index = setCartesian(range(0, gridSize), range(0, gridSize));
-    this.targets = ones(this.gridSize, this.gridSize);
-    this.painted = zeros(this.gridSize, this.gridSize);
+    this.index = setCartesian(
+      range(0, this.gridWidth),
+      range(0, this.gridHeight)
+    );
+    this.targets = ones(this.gridWidth, this.gridHeight);
+    this.painted = zeros(this.gridWidth, this.gridHeight);
     this.index._data.forEach((ind) => {
       this.targets.set([ind[0], ind[1]], new Target(ind[0], ind[1]));
     });
-    this.invIndex = reshape(range(0, this.gridSize * this.gridSize), [
-      this.gridSize,
-      this.gridSize,
+    this.invIndex = reshape(range(0, this.gridWidth * this.gridHeight), [
+      this.gridWidth,
+      this.gridHeight,
     ]);
     this.offsets = new Map(
       Object.entries({
-        D: new Target(1, 0),
-        U: new Target(-1, 0),
-        L: new Target(0, -1),
-        R: new Target(0, 1),
+        R: new Target(1, 0),
+        L: new Target(-1, 0),
+        U: new Target(0, -1),
+        D: new Target(0, 1),
       })
     );
+
+    this.eigenOffsets = { D: 0, U: 2, L: 1, R: 3 };
 
     this.colorMap = new Array(this.gridChoices);
     this.allowed = new Array(this.gridChoices);
     this.nameIndex = new Array(this.gridChoices);
+    this.invertedIndex = invertedIndex;
     for (const name in tileset) {
       const tile = tileset[name];
       tile.color.push(255);
@@ -369,9 +419,11 @@ export class Grid {
       this.allowed[invertedIndex[name]] = tile.generate;
       this.nameIndex[invertedIndex[name]] = name;
     }
+    console.log(this.allowed);
 
     // Build the DAG
     this.nodeIndex = {};
+    this.edgeIndexDown = {};
     for (const n in tileset) {
       this.nodeIndex[n] = new Node(n, invertedIndex[n]);
     }
@@ -379,10 +431,14 @@ export class Grid {
     for (const n in tileset) {
       const node = tileset[n];
       for (const c in node.children) {
+        const downEdge = new Edge(node.children[c]);
         this.nodeIndex[n].outgoing = this.nodeIndex[n].outgoing.set(
           this.nodeIndex[c],
-          new Edge(node.children[c])
+          downEdge
         );
+        this.edgeIndexDown[
+          `${this.nodeIndex[n].index}|${this.nodeIndex[c].index}`
+        ] = downEdge;
         this.nodeIndex[c].incoming = this.nodeIndex[c].incoming.set(
           this.nodeIndex[n],
           new Edge(node.children[n])
@@ -391,15 +447,11 @@ export class Grid {
     }
     this.root = this.nodeIndex[this.nameIndex[0]].root();
 
-    // Set the depths
-    for (const n in tileset) {
-      this.nodeIndex[n].depth = this.nodeIndex[n].getDepth(0);
-    }
-
     // Precompute all paths
     // Access method: .get(leaf).get(meta)
     this.pathMap = new Map();
-    for (const node of this.root.leaves()) {
+    for (const n in this.nodeIndex) {
+      const node = this.nodeIndex[n];
       console.log("LEAF: ", this.nameIndex[node.index]);
       let tempMap = new Map();
       let q = [node];
@@ -430,34 +482,19 @@ export class Grid {
           }
         }
 
-        // Convert path to bitmask representation
-        // let tempMaskMap = new Map();
-        // for (const [index, path] of tempMap) {
-        //   const mask = zeros(this.gridChoices);
-        //   for (const vertex of path) {
-        //     mask.set([vertex.index], 1);
-        //   }
-        //   console.log(node.index);
-        //   mask.set([node.index], 1);
-        //   tempMaskMap = tempMaskMap.set(index, mask);
-        // }
-
         this.pathMap = this.pathMap.set(node.index, tempMap);
       }
     }
 
-    // console.log(
-    //   "rootpaths1:",
-    //   this.pathMap.get(invertedIndex["grass"]).get(invertedIndex["root"])
-    // );
-
-    // console.log(
-    //   "rootpaths2:",
-    //   this.pathMap.get(invertedIndex["tree"]).get(invertedIndex["root"])
-    // );
+    // Set the depths based on shortest path to root
+    for (const n in this.nodeIndex) {
+      const node = this.nodeIndex[n];
+      node.depth =
+        new Set(this.pathMap.get(node.index).get(0)).minBy((a) => a.size)
+          ?.length ?? 0 - 1;
+    }
 
     // NOTE: If the adjacencies are bad, a giant propagation wave can be triggered right at the start, explains the lag-spike
-    // TODO: Directional adjacencies
     this.adj = new Map();
     this.adjaug = new Map();
     this.offsets.forEach((_, key) => {
@@ -465,25 +502,6 @@ export class Grid {
       this.adj = this.adj.set(key, mat);
       this.adjaug = this.adjaug.set(key, clone(mat));
     });
-
-    // this.allowed = matrix([0, 1, 1, 1, 1]);
-
-    // queue = []
-    // for leaf in T.root.leaves:
-    //     queue += list(leaf.archetypes.values())
-    // while queue:
-    //     link = queue.pop(0)
-    //     archetype = link.frm
-    //     subtype = link.to
-
-    //     print(link)
-
-    //     for atile in archetype.tile_ids:
-    //         for stile in subtype.tile_ids:
-    //             ADJ_AUG[o][atile, :] |= ADJ_AUG[o][stile, :]
-    //             ADJ_AUG[o][:, atile] |= ADJ_AUG[o][:, stile]
-
-    //     queue += list(archetype.archetypes.values())
 
     // Augment the adjacencies
     this.offsets.forEach((_, key) => {
@@ -522,26 +540,87 @@ export class Grid {
         this.adjaug.get(key).subset(index(node.index, this.ALL), augmentedH);
         this.adjaug.get(key).subset(index(this.ALL, node.index), augmentedV);
 
-        // console.log(this.adj.subset(index(child.index, this.ALL)));
-        // console.log();
-        // console.log(hue);
-
         for (const parent of node.incoming.keys()) {
           q.push([parent, node]);
         }
       }
     });
 
-    console.log(this.nodeIndex);
-    console.log(this.adjaug);
+    // for (const node of this.root.leaves()) {
+    //   console.log(
+    //     node.name,
+    //     node
+    //       .ancestors()
+    //       .toArray()
+    //       .map((c) => c.name)
+    //   );
+    // }
 
-    console.log(this.indices([2, 23, 1, 2, 3, 4, 52, 2], 2));
+    // console.log(this.nodeIndex["sand"].commonAncestor(this.nodeIndex["grass"]));
+  }
+
+  setMod(edgeIndex, modifier) {
+    this.edgeIndexDown[edgeIndex].mod = modifier;
+  }
+
+  getState() {
+    return {
+      image: this.image,
+      entropyImage: this.entropyImage,
+      nameIndex: this.nameIndex,
+      invertedIndex: this.invertedIndex,
+      chosen: this.chosen,
+      choices: this.choices,
+      entropy: this.entropy,
+    };
+  }
+
+  // INDEXING SCHEME - COLMAJOR
+  //        __________
+  //     1X/_________/|
+  //      /_________/||
+  //      | 3C -->  |||
+  //    2Y|         ||/
+  //      |_________|/
+  //
+  //  Formula: c + C * y + C * Y * x
+  //
+  getChoices(x, y) {
+    const arr = new Array(this.gridChoices);
+    for (let c = 0; c < this.gridChoices; c++) {
+      arr[c] =
+        this.choices[
+          c + this.gridChoices * y + this.gridChoices * this.gridHeight * x
+        ];
+    }
+    return arr;
+  }
+
+  setChoices(x, y, choices) {
+    for (let c = 0; c < this.gridChoices; c++) {
+      this.choices[
+        c + this.gridChoices * y + this.gridChoices * this.gridHeight * x
+      ] = choices[c];
+    }
+  }
+
+  async initialize() {
+    // this.choices = ones(this.gridWidth, this.gridHeight, this.gridChoices); // Done earlier now during eigen init
+
+    // Init eigen
+    await eig.ready;
+
+    // console.log(this.nodeIndex);
+
+    // console.log(this.indices([2, 23, 1, 2, 3, 4, 52, 2], 2));
 
     // Build masks
     this.SM = {};
+    this.eigSM = new eig.BoolMatrix(this.gridChoices, this.gridChoices);
     this.CM = {};
-    this.LM = zeros(this.gridChoices);
-    for (const n in tileset) {
+    this.eigCM = new eig.BoolMatrix(this.gridChoices, this.gridChoices);
+    this.LM = new eig.BoolMatrix(this.gridChoices, 1); //zeros(this.gridChoices);
+    for (const n in this.tileset) {
       const node = this.nodeIndex[n];
       const children = [];
       const subMask = zeros(this.gridChoices);
@@ -549,200 +628,103 @@ export class Grid {
       children.push(...node.outgoing.keys());
       for (const c of children) {
         childMask.set([c.index], 1);
+        this.eigCM.set(node.index, c.index, true);
       }
 
       while (children.length > 0) {
         var child = children.pop();
         subMask.set([child.index], 1);
+        this.eigCM.set(node.index, child.index, true);
         children.push(...child.outgoing.keys());
       }
       this.SM[node.index] = subMask;
       this.CM[node.index] = childMask;
       if (node.outgoing.size == 0) {
-        this.LM.set([node.index], 1);
+        this.LM.set(node.index, 1);
       }
     }
-    console.log(this.LM);
 
-    this.initialize();
-  }
+    // Copy masks/adjacencies to eigen matrices
+    this.eigenGrid = new eig.Grid(
+      this.gridWidth,
+      this.gridHeight,
+      this.gridChoices,
+      new eig.BoolMatrix(this.adjaug.get("U")._data),
+      new eig.BoolMatrix(this.adjaug.get("R")._data),
+      new eig.BoolMatrix(this.adjaug.get("D")._data),
+      new eig.BoolMatrix(this.adjaug.get("L")._data),
+      this.eigCM,
+      this.eigSM,
+      this.LM
+    );
 
-  // bufferEntropy(x, y, value) {
-  //   // console.log("PROCESSING:", x, y, "VAL:", value);
-  //   // console.log("BUFFER", this.entropyBuffer.values());
-  //   // // if (value <= this.entropyBuffer.max().value) {
-  //   // // console.log(value);
-  //   // const ce = new CellEntropy(new Target(x, y), value);
-  //   // console.log("CE INSTANCE:", ce);
-  //   // console.log("HAS CE INSTANCE:", this.entropyBuffer.has(ce));
-  //   // console.log("RANK:", this.entropyBuffer.rank(ce));
-  //   // // console.log(this.entropyBuffer.findValue(ce));
-  //   // console.log(
-  //   //   "BUFF",
-  //   //   this.entropyBuffer.map((c) => [
-  //   //     c.x,
-  //   //     c.y,
-  //   //     ":",
-  //   //     this.entropy.get([c.x, c.y]),
-  //   //   ])
-  //   // );
-  //   // console.log(this.entropyBuffer);
-  //   const target = this.targets.get([x, y]);
-  //   // const entr = this.entropy.get([target.x, target.y]);
-  //   this.entropyBuffer.add(new CellEntropy(target, value));
+    // set choices
+    this.choices = this.eigenGrid.getChoices();
 
-  //   if (this.entropyBuffer.array.length === 0) {
-  //     this.leastEntropyLegacy()
-  //       ._data.slice(0, this.entropyBufferSize)
-  //       .forEach((e) => {
-  //         this.entropyBuffer.add(
-  //           new CellEntropy(
-  //             this.targets.get([e[0], e[1]]),
-  //             this.entropy.get([e[0], e[1]])
-  //           )
-  //         );
-  //       });
-  //   }
-  // console.log(this.entropyBuffer.array);
-
-  // if (entr === Infinity) {
-  //   this.entropyBuffer.delete(target);
-  // }
-
-  // if (this.entropyBuffer.has(target)) {
-  //   this.entropyBuffer.delete(target);
-  // }
-
-  // // console.log("HAS CE INSTANCE AFTER:", this.entropyBuffer.has(ce));
-  // // console.log("RANK AFTER:", this.entropyBuffer.rank(ce));
-  // if (this.entropy.get([target.x, target.y]) < Infinity) {
-  // } else {
-  //   this.entropyBuffer.delete(target);
-  // }
-
-  // }
-
-  // if (this.entropyBuffer.length >= this.entropyBufferSize) {
-  //   // console.log("T:", this.entropyBuffer._first(-1000));
-  //   // console.log(
-  //   //   "BUFF AFT",
-  //   //   this.entropyBuffer.map((c) => [
-  //   //     c.x,
-  //   //     c.y,
-  //   //     ":",
-  //   //     this.entropy.get([c.x, c.y]),
-  //   //   ])
-  //   // );
-  //   const q = this.entropyBuffer.shift();
-
-  //   // console.log("SHIFTED:", q, this.entropy.get([q.x, q.y]));
-  // }
-  // }
-
-  getState() {
-    return {
-      image: this.image,
-      entropyImage: this.entropyImage,
-      nameIndex: this.nameIndex,
-      choices: this.choices,
-      entropy: this.entropy,
-    };
-  }
-
-  initialize() {
-    this.choices = ones(this.gridSize, this.gridSize, this.gridChoices);
+    this.collapsePaths = zeros(
+      this.gridWidth,
+      this.gridHeight,
+      this.gridChoices
+    );
+    this.collapsePaths.subset(
+      index(this.WIDTH, this.HEIGHT, 0),
+      ones(this.gridWidth, this.gridHeight)
+    );
     this.chosen = dotMultiply(
-      ones(this.gridSize, this.gridSize),
+      ones(this.gridWidth, this.gridHeight),
       this.root.index
     );
     this.image = dotMultiply(
-      ones(this.gridSize, this.gridSize, 4),
+      ones(this.gridWidth, this.gridHeight, 4),
       this.colorMap[this.root.index]
     );
     this.entropyImage = dotMultiply(
-      ones(this.gridSize, this.gridSize, 4),
+      ones(this.gridHeight, this.gridWidth, 4),
       this.entropyColors[this.gridChoices - 1]
     );
     this.entropy = dotMultiply(
-      ones(this.gridSize, this.gridSize),
+      ones(this.gridWidth, this.gridHeight),
       this.gridChoices
     );
-    // this.index._data.forEach((i) => {
-    //   this.entropy._data[i[0]][i[1]] = this.getCellEntropy(i[0], i[1]);
-    // });
-    // this.entropy.map(e => )
 
-    const rX = floor(random(this.gridSize));
-    const rY = floor(random(this.gridSize));
-
-    // this.minEntropy = new CellEntropy(
-    //   this.targets.get([rX, rY]),
-    //   this.gridChoices
-    // );
-
-    // this.minEntropy = new BTree([], (a, b) => {
-    //   if (a === b) {
-    //     return 0;
-    //   }
-
-    //   return this.entropy._data[a.x][a.y] - this.entropy._data[b.x][b.y];
-    // });
-
-    // this.minEntropy = new SoMap([], (a, b) => {
-    //   return this.entropy._data[a.x][a.y] - this.entropy._data[b.x][b.y];
-    // });
-    // this.minEntropy.set(this.targets.get([rX, rY]), this.entropy.get([rX, rY]));
-    // console.log(this.minEntropy.min());
-
-    // this.minEntropy = new ProperSkipList();
-    // this.minEntropy.upsert(
-    //   this.targets.get([rX, rY]),
-    //   this.entropy.get([rX, rY])
-    // );
+    const rX = floor(random(this.gridWidth));
+    const rY = floor(random(this.gridHeight));
 
     this.minEntropy = new SortedSet();
     this.minEntropy.add(
       this.invIndex._data[rX][rY],
       this.applyEntropyModifiers(this.entropy.get([rX, rY]))
     );
-    // console.log(SortedArraySet);
-    // this.entropyBuffer = new SortedSet();
 
-    // this.entropyBuffer = new MinPriorityQueue((ce) => ce.value);
-    // this.entropyBuffer.add(
-    //   new CellEntropy(this.targets.get([0, 0]), this.entropy._data[0][0])
-    // );
+    // this.clearQueue();
 
-    // this.entropyBuffer = new SortedArraySet(
-    //   [this.targets.get([0, 0])],
-    //   null,
-    //   (a, b) => this.entropy.get([a.x, a.y]) - this.entropy.get([b.x, b.y])
-    // );
+    ///////////////////////////////////////////////
+    const rootChoices = this.SM[this.root.index]._data;
 
-    // this.entropyBuffer = new SortedSet({
-    //   compare: (a, b) =>
-    //     this.entropy.get([a.x, a.y]) - this.entropy.get([b.x, b.y]),
-    // });
-    // this.entropyBuffer.add(this.targets.get([0, 0]));
-    // this.entropyBuffer = new SortedArraySet(16 * this.entropyBufferSize);
-    // this.bufferEntropy(0, 0, this.entropy._data[0][0]);
+    // TODO: This can be done more efficiently
+    for (let x = 0; x < this.gridWidth; x++) {
+      for (let y = 0; y < this.gridHeight; y++) {
+        this.setChoices(x, y, rootChoices);
+        // console.log("new array: ", newChoices);
 
-    // this.entropyQT = new MinQuadTree(
-    //   this.gridSize,
-    //   this.gridSize,
-    //   this.gridChoices,
-    //   this.targets
-    // );
-
-    // console.log(this.entropyQT);
-
-    this.clearQueue();
+        // Sync with eigen
+        var v = new eig.Vector();
+        rootChoices.forEach((val) => v.push_back(val));
+        this.eigenGrid.setCol(x, y, v);
+      }
+    }
   }
 
   // Undo system
   checkpoint() {
     this.undoStack.push(
-      new GridState(this.choices, this.chosen, this.entropy, this.painted)
+      new GridState(
+        this.choices,
+        this.chosen,
+        this.entropy,
+        this.painted,
+        this.collapsePaths
+      )
     );
     this.redoStack = [];
     this.current = null;
@@ -754,7 +736,8 @@ export class Grid {
       this.choices,
       this.chosen,
       this.entropy,
-      this.painted
+      this.painted,
+      this.collapsePaths
     );
   }
 
@@ -778,7 +761,8 @@ export class Grid {
         this.choices,
         this.chosen,
         this.entropy,
-        this.painted
+        this.painted,
+        this.collapsePaths
       );
     }
     if (this.undoStack.length > 0) {
@@ -791,11 +775,13 @@ export class Grid {
   loadGridState(gridState) {
     console.log("Loaded gridstate: ", gridState);
     this.current = gridState;
-    this.clearQueue();
-    this.choices = clone(gridState.choices);
+    // this.clearQueue();
+    this.choices = new Uint8Array(gridState.choices);
+    this.eigenGrid.setChoices(this.choices);
     this.chosen = clone(gridState.chosen);
     this.entropy = clone(gridState.entropy);
     this.painted = clone(gridState.painted);
+    this.collapsePaths = clone(gridState.collapsePaths);
 
     // We have to re-add what we had done so far
     this.minEntropy = new SortedSet();
@@ -814,10 +800,10 @@ export class Grid {
       }
     });
 
-    if (this.minEntropy.length === 0) {
+    while (this.minEntropy.length === 0) {
       // Choose random point
-      const rX = floor(random(this.gridSize));
-      const rY = floor(random(this.gridSize));
+      const rX = floor(random(this.gridWidth));
+      const rY = floor(random(this.gridHeight));
 
       this.minEntropy.add(
         this.invIndex._data[rX][rY],
@@ -837,7 +823,7 @@ export class Grid {
       return this.colorMap[this.chosen.get(p)][i[2]];
     });
     this.entropyImage = this.entropyImage.map((v, i, m) => {
-      const p = [i[0], i[1]];
+      const p = [i[1], i[0]];
       const entropyValue = floor(this.entropy.get(p));
       const color =
         entropyValue <= this.entropyColors.length && entropyValue >= 0
@@ -859,7 +845,9 @@ export class Grid {
   }
 
   bitmaskSum(x, y) {
-    const choices = this.choices.subset(index(x, y, this.ALL));
+    // console.log(this.choices._data);
+
+    const choices = this.getChoices(x, y); //this.choices.subset(index(x, y, this.ALL));
     const s = sum(choices);
     if (s <= 1) {
       return -Infinity;
@@ -872,39 +860,9 @@ export class Grid {
     return bm;
   }
 
-  // leastEntropy() {
-  //   return this.entropyBuffer.array.map((ce) => [ce.target.x, ce.target.y]);
-  //   // const s = flatten(this.entropy);
-  //   // const r = range(0, s.size()[0]);
-  //   // const idx = sort(r, (a, b) => s._data[a] - s._data[b]);
-  //   // return this.index.subset(index(idx, range(0, 2)));
-  //   // return matrix([
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   //   [floor(this.counter / this.gridSize), this.counter++ % this.gridSize],
-  //   // ]);
-  // }
-
   leastEntropyQT() {
     const k = this.minEntropy.range(-1);
-    // console.log(k);
     const vals = this.index._data[k[0]];
-    // console.log("HHH", k);
-    // const k = this.minEntropy.minKey();
-    // this.minEntropy.delete(k);
     return new Target(vals[0], vals[1]);
   }
 
@@ -919,42 +877,49 @@ export class Grid {
     return arr.map((v, u) => (v === val ? u : -1)).filter((v) => v !== -1);
   }
 
-  isEnqueued(collapseTarget) {
-    for (const e of this.collapseQueue.entries()) {
-      if (
-        e[0] === collapseTarget[0] &&
-        e[1] === collapseTarget[1] &&
-        e[2] === collapseTarget[2]
-      ) {
-        return true;
+  // isEnqueued(collapseTarget) {
+  //   for (const e of this.collapseQueue.entries()) {
+  //     if (
+  //       e[0] === collapseTarget[0] &&
+  //       e[1] === collapseTarget[1] &&
+  //       e[2] === collapseTarget[2]
+  //     ) {
+  //       return true;
+  //     }
+  //   }
+  //   return false;
+  // }
+
+  autoCollapse(targets) {
+    for (const t of targets) {
+      if (this.minEntropy.length > 0) {
+        const le = this.leastEntropyQT();
+        if (le !== undefined) {
+          t.x = le.x;
+          t.y = le.y;
+          // /          console.log(t);
+          this.collapse([t]);
+          this.propagate([t]);
+        }
       }
     }
-    return false;
-  }
-
-  autoCollapse(amount = 1) {
-    this.collapseQueue.extendLeft(new Array(amount).fill([-1, -1, -1]));
   }
 
   update() {
-    // TODO: Investigate whether it is OK for responsiveness to go from an "if" to a "while"
-    while (this.collapseQueue.size > 0) {
-      const entry = this.collapseQueue.popLeft();
-      let target = entry;
-      // Automated collapse; we only fetch the entropy on popping the queue
-      if (entry[2] === -1) {
-        if (this.minEntropy.length > 0) {
-          const le = this.leastEntropyQT();
-          if (le !== undefined) {
-            target[0] = le.x;
-            target[1] = le.y;
-            this.collapse(le.x, le.y, -1);
-          }
-        }
-      } else {
-        this.collapse(target[0], target[1], target[2]);
+    this.modifiedTiles = [];
+    while (!this.jobQueue.isEmpty()) {
+      const job = this.jobQueue.dequeue();
+      switch (job.type) {
+        case 0:
+          this.paint(job.targets);
+          break;
+        case 1:
+          this.autoCollapse(job.targets);
+          break;
       }
+      this.modifiedTiles.push(...job.targets.map((t) => [t.x, t.y]));
     }
+    return this.modifiedTiles;
   }
 
   // TODO: add relevant params
@@ -966,345 +931,471 @@ export class Grid {
     return -entropy + random(0.0001);
   }
 
-  clearQueue() {
-    this.collapseQueue.clear();
+  // clearQueue() {
+  //   this.collapseQueue.clear();
+  // }
+
+  paintEnqueue(coordinates, tileIndex) {
+    const targets = coordinates.map((c) => new Target(c[0], c[1], tileIndex));
+    this.jobQueue.enqueue({ type: 0, targets: targets });
+    // for (
+    //   let i = Math.floor(x - markerSize / 2) + 1;
+    //   i < Math.floor(x + markerSize / 2) + 1;
+    //   i++
+    // ) {
+    //   for (
+    //     let j = Math.floor(y - markerSize / 2) + 1;
+    //     j < Math.floor(y + markerSize / 2) + 1;
+    //     j++
+    //   ) {
+    //     if (i >= 0 && i < this.gridWidth && j >= 0 && j < this.gridHeight) {
+    //       // stuff here
+    //     }
+    //   }
+    // }
   }
 
-  manualCollapse(x, y, tile_index) {
-    if (!this.isEnqueued([x, y, tile_index])) {
-      this.collapseQueue.pushLeft([x, y, tile_index]);
+  autoEnqueue(amount = 1) {
+    const targets = [];
+    for (let i = 0; i < amount; i++) {
+      targets.push(new Target(-1, -1));
     }
+    this.jobQueue.enqueue({ type: 1, targets: targets });
   }
 
-  collapse(x, y, tile_index = -1) {
-    // const choices = squeeze(this.choices.subset(index(x, y, this.ALL)));
-    const choices = this.choices._data[x][y];
+  collapsePathEnqueue(tileIndex) {
+    console.log(tileIndex);
+    const slice = this.collapsePaths.subset(
+      index(this.WIDTH, this.HEIGHT, [tileIndex])
+    );
+    const targets = [];
+    const cells = [];
+    slice.forEach((c, i) => {
+      if (c) {
+        targets.push(new Target(i[0], i[1], tileIndex));
+        cells.push([i[0], i[1]]);
+      }
+    });
+    this.jobQueue.enqueue({ type: 0, targets: targets });
+    return cells;
+  }
 
-    // const currentTile = this.chosen.subset(index(x, y));
-    const currentTile = this.chosen._data[x][y];
+  // TODO: bonus feature, to illustrate the idea of job enqueueing
+  growEnqueue() {}
 
-    const childMask = this.CM[currentTile];
+  manualCollapse(jobId, x, y, markerSize, tileIndex) {}
 
-    // Apply weights
-    for (const cidx of this.indices(childMask._data)) {
-      const edge = this.nodeIndex[this.nameIndex[currentTile]].outgoing.get(
-        this.nodeIndex[this.nameIndex[cidx]]
-      );
-      childMask._data[cidx] = edge.weight; //.set([cidx], edge.weight);
-    }
+  paint(targets) {
+    // bins
+    const uncollapseBin = [];
+    const collapseBin = [];
+    const replaceBinUp = [];
+    const replaceBinDown = [];
+    for (let t of targets) {
+      const x = t.x;
+      const y = t.y;
+      const targetTileIndex = t.tile_index;
+      const targetNode = this.nodeIndex[this.nameIndex[targetTileIndex]];
+      const targetSubtreeMask = this.SM[targetTileIndex];
+      const currentTileIndex = this.chosen._data[x][y];
+      const currentNode = this.nodeIndex[this.nameIndex[currentTileIndex]];
+      const currentSubtreeMask = this.SM[currentTileIndex];
+      const ancestor = currentNode.commonAncestor(targetNode); // This is actually problematic...
 
-    let choice = pickRandom(this.ALL, dotMultiply(choices, childMask));
-    if (isUndefined(choice)) {
-      // console.log("Warning, uncollapsable cell:", x, y, choices);
-      return false;
-    }
+      if (currentTileIndex === targetTileIndex) {
+        // console.log("NO-OP");
+        collapseBin.push(t);
 
-    if (tile_index >= 0) {
-      if (choices[tile_index]) {
-        choice = tile_index;
+        continue;
+      } else if (
+        !targetSubtreeMask.get([currentTileIndex]) &&
+        !currentSubtreeMask.get([targetTileIndex])
+      ) {
+        // Uncollapse to common ancestor first
+        // console.log("UP-DOWN");
+        replaceBinUp.push(new Target(t.x, t.y, this.root.index));
+        replaceBinDown.push(t);
       } else {
-        return false;
+        if (ancestor === currentNode) {
+          // this.collapse([t]);
+          collapseBin.push(t);
+        } else {
+          uncollapseBin.push(t);
+          // this.uncollapse([t]);
+        }
       }
     }
 
-    const newChoices = dotMultiply(this.SM[choice], choices);
-    newChoices._data[choice] = 1; //.set([choice], 1);
-    this.choices.subset(index(x, y, this.ALL), newChoices);
-    // this.chosen.subset(index(x, y), choice);
-    this.chosen._data[x][y] = choice;
+    // Painting always sets the collapse path to the current tile
 
-    // this.entropy.subset(index(x, y), this.getCellEntropy(x, y));
-    if (tile_index >= 0) {
-      this.painted._data[x][y] = 1;
+    // Order from most flexible to most restrictive
+
+    // Replace
+    if (replaceBinUp.length > 0 && replaceBinDown.length > 0) {
+      // console.log(replaceBinUp);
+      //
+      this.uncollapse(replaceBinUp);
+      this.depropagate(replaceBinUp);
+      this.collapse(replaceBinDown, true);
+      this.propagate(replaceBinDown);
     }
-    const entropyValue = this.getCellEntropy(x, y);
-    this.entropy._data[x][y] = entropyValue;
-    // console.log("BUFFERIGN FROM COLLAPSE AT", x, y);
-    // this.bufferEntropy(x, y, entropyValue);
-    // this.entropyQT.set(this.targets.get([x, y]), entropyValue);
-    // if (entropyValue > 1 && entropyValue < this.minEntropy.value) {
-    //   this.minEntropy = new CellEntropy(this.targets.get([x, y]), entropyValue);
-    // }
-    // console.log(this.minEntropy);
-    if (entropyValue > 1) {
-      // console.log("ADD:", x, y, "|", entropyValue);
-      this.minEntropy.add(
-        this.invIndex._data[x][y],
-        this.applyEntropyModifiers(entropyValue, {
-          painted: this.painted._data[x][y],
-        })
+    // Uncollapse
+    if (uncollapseBin.length > 0) {
+      this.uncollapse(uncollapseBin);
+      this.depropagate(uncollapseBin);
+    }
+    // Regular collapse
+    if (collapseBin.length > 0) {
+      this.collapse(collapseBin, true);
+      this.propagate(collapseBin);
+    }
+  }
+
+  collapse(targets, manual = false) {
+    for (let t of targets) {
+      const x = t.x;
+      const y = t.y;
+      const tile_index = t.tile_index;
+      let choices = this.getChoices(x, y);
+      if (!manual) {
+        choices = this.getChoices(x, y);
+      }
+      const currentTile = this.chosen._data[x][y];
+
+      const childMask = clone(this.CM[currentTile]);
+
+      // Apply weights
+      if (!manual) {
+        for (const cidx of this.indices(childMask._data)) {
+          const edge = this.nodeIndex[this.nameIndex[currentTile]].outgoing.get(
+            this.nodeIndex[this.nameIndex[cidx]]
+          );
+          childMask._data[cidx] *= edge.weight * edge.mod;
+        }
+      }
+
+      let choice = pickRandom(this.ALL, dotMultiply(choices, childMask));
+      // console.log(choices, childMask._data);
+      // console.log("Choice: ", choice);
+      if (isUndefined(choice)) {
+        // console.log("Warning, uncollapsable cell:", x, y, choices);
+        // console.log("HUH1");
+        const s = this.minEntropy.del(this.invIndex._data[x][y]); // Should be removed
+
+        // console.log(this.namesFromChoices(choices));
+        // console.log(this.namesFromChoices(childMask));
+        continue;
+      }
+
+      if (tile_index >= 0) {
+        if (choices[tile_index]) {
+          choice = tile_index;
+        } else {
+          // Tile is not allowed
+          // console.log("HUH2");
+          // No need to remove from buffer --> tile_index >= 0 means painted
+          continue;
+        }
+      }
+
+      const newChoices = dotMultiply(this.SM[choice], choices);
+      newChoices._data[choice] = 1; //.set([choice], 1);
+      this.collapsePaths.set([x, y, choice], 1);
+      this.setChoices(x, y, newChoices._data);
+      // console.log("new array: ", newChoices);
+
+      // Sync with eigen
+      var v = new eig.Vector();
+      newChoices._data.forEach((val) => v.push_back(val));
+      this.eigenGrid.setCol(x, y, v);
+
+      // this.chosen.subset(index(x, y), choice);
+      this.chosen._data[x][y] = choice;
+
+      // this.entropy.subset(index(x, y), this.getCellEntropy(x, y));
+      if (tile_index >= 0) {
+        this.painted._data[x][y] = 1;
+      }
+      const entropyValue = this.getCellEntropy(x, y);
+      this.entropy._data[x][y] = entropyValue;
+
+      if (entropyValue > 1) {
+        this.minEntropy.add(
+          this.invIndex._data[x][y],
+          this.applyEntropyModifiers(entropyValue, {
+            painted: this.painted._data[x][y],
+          })
+        );
+      } else {
+        // console.log("DEL:", x, y, "|", entropyValue);
+        this.painted._data[x][y] = 0;
+        const s = this.minEntropy.del(this.invIndex._data[x][y]);
+        // console.log(s, this.minEntropy.min());
+      }
+      // console.log(this.minEntropy);
+      // console.log("STATE:", this.entropyBuffer.toArray());
+      // this.image.subset(index(x, y, this.COLOR), this.colorMap[choice]);
+      this.image._data[x][y][0] = this.colorMap[choice][0];
+      this.image._data[x][y][1] = this.colorMap[choice][1];
+      this.image._data[x][y][2] = this.colorMap[choice][2];
+
+      // For debugging purposes
+      // const entr = this.entropy.get([x, y]);
+      this.entropyImage.subset(
+        index(y, x, this.COLOR),
+        entropyValue <= this.entropyColors.length && entropyValue >= 0
+          ? this.entropyColors[floor(entropyValue - 1)]
+          : [0, 0, 0, 255]
       );
-    } else {
-      // console.log("DEL:", x, y, "|", entropyValue);
-      this.painted._data[x][y] = 0;
-      const s = this.minEntropy.del(this.invIndex._data[x][y]);
-      // console.log(s, this.minEntropy.min());
     }
-    // console.log(this.minEntropy);
-    // console.log("STATE:", this.entropyBuffer.toArray());
-    // this.image.subset(index(x, y, this.COLOR), this.colorMap[choice]);
-    this.image._data[x][y][0] = this.colorMap[choice][0];
-    this.image._data[x][y][1] = this.colorMap[choice][1];
-    this.image._data[x][y][2] = this.colorMap[choice][2];
-
-    // For debugging purposes
-    // const entr = this.entropy.get([x, y]);
-    this.entropyImage.subset(
-      index(x, y, this.COLOR),
-      entropyValue <= this.entropyColors.length && entropyValue >= 0
-        ? this.entropyColors[floor(entropyValue - 1)]
-        : [0, 0, 0, 255]
-    );
-
-    this.propagate(x, y, tile_index >= 0);
-
     return true;
   }
 
-  // TODO: add function to set tile, that combines all the different things happening
+  // resetCollapsePath(targets) {
+  //   const initial = zeros(this.gridChoices);
+  //   initial.set([this.root.index], 1);
+  //   for (let t of targets) {
+  //     this.collapsePaths.subset(index([t.x], [t.y], this.ALL), initial);
+  //   }
+  // }
 
-  propagate(cx, cy, painted) {
-    const q = new Deque();
-    q.pushLeft(new Target(cx, cy));
+  uncollapse(targets) {
+    for (let t of targets) {
+      const x = t.x;
+      const y = t.y;
+      const tile_index = t.tile_index;
+      const choices = this.getChoices(x, y);
+      const currentTile = this.chosen._data[x][y];
+      const subtreeMask = this.SM[tile_index];
+
+      // if the current tile is not in the subtree of the new tile: abort
+      if (!subtreeMask.get([currentTile])) {
+        return false;
+      }
+
+      const newChoices = subtreeMask;
+      newChoices._data[tile_index] = 1;
+      this.setChoices(x, y, newChoices._data);
+
+      // Sync with eigen
+      // TODO: can move this into "setChoices"
+      var v = new eig.Vector();
+      newChoices._data.forEach((val) => v.push_back(val));
+      this.eigenGrid.setCol(x, y, v);
+
+      // this.chosen.subset(index(x, y), choice);
+      this.chosen._data[x][y] = tile_index;
+
+      // TODO: should precompute this like the other properties
+
+      // Setting the new collapse paths - goals
+      // - We want to preserve information about how we got to the original tile as much as possible, so we have to consider the ancestors
+      // - At the same time, we should remove anything that is in the subtree of the tile it is currently being set to, as that is no longer relevant; we are going to collapse to new tiles
+      const anc = zeros(this.gridChoices);
+      this.nodeIndex[this.nameIndex[tile_index]].ancestors().forEach((a) => {
+        anc.set([a.index], 1);
+      });
+      const currentCollapsePath = squeeze(
+        this.collapsePaths.subset(index(x, y, this.ALL))
+      );
+      const subtree = clone(this.SM[tile_index]);
+      const newCollapsePath = and(anc, and(currentCollapsePath, not(subtree)));
+      newCollapsePath.set([tile_index], true);
+      this.collapsePaths.subset(index(x, y, this.ALL), newCollapsePath);
+
+      // TODO: currently not used
+      if (tile_index >= 0) {
+        this.painted._data[x][y] = 1;
+      }
+
+      // We have to calculate the entropy; it will be updated anyway if some of the children are not allowed
+      const entropyValue = this.getCellEntropy(x, y);
+      this.entropy._data[x][y] = entropyValue;
+
+      if (entropyValue > 1) {
+        this.minEntropy.add(
+          this.invIndex._data[x][y],
+          this.applyEntropyModifiers(entropyValue, {
+            painted: this.painted._data[x][y],
+          })
+        );
+      } else {
+        this.painted._data[x][y] = 0;
+        const s = this.minEntropy.del(this.invIndex._data[x][y]);
+      }
+      // // console.log(this.minEntropy);
+      // // console.log("STATE:", this.entropyBuffer.toArray());
+      // // this.image.subset(index(x, y, this.COLOR), this.colorMap[choice]);
+      this.image._data[x][y][0] = this.colorMap[tile_index][0];
+      this.image._data[x][y][1] = this.colorMap[tile_index][1];
+      this.image._data[x][y][2] = this.colorMap[tile_index][2];
+
+      // // For debugging purposes
+      this.entropyImage.subset(
+        index(y, x, this.COLOR),
+        entropyValue <= this.entropyColors.length && entropyValue >= 0
+          ? this.entropyColors[floor(entropyValue - 1)]
+          : [0, 0, 0, 255]
+      );
+    }
+    return true;
+  }
+
+  namesFromChoices(choices) {
+    return this.nameIndex.filter((n) => choices[this.invertedIndex[n]]);
+  }
+
+  depropagate(targets) {
+    const Q = new Deque(targets);
+    const postQ = new Deque();
+    const P = targets;
+    while (Q.size > 0) {
+      const p = Q.pop();
+      // console.log("Depropagating", p, "...");
+      this.offsets.forEach((o, k) => {
+        const nx = p.x + o.x;
+        const ny = p.y + o.y;
+        if (nx >= 0 && nx < this.gridWidth && ny >= 0 && ny < this.gridHeight) {
+          var diff = this.eigenGrid.depropagate(
+            p.x,
+            p.y,
+            nx,
+            ny,
+            this.eigenOffsets[k],
+            this.chosen.get([nx, ny])
+          );
+
+          var neighbour = new Target(nx, ny);
+          if (diff) {
+            postQ.push(neighbour);
+            Q.push(neighbour);
+          } else {
+            P.push(neighbour);
+          }
+        }
+      });
+    }
+
+    // Copy choices
+    this.choices = this.eigenGrid.getChoices();
+    // console.time("postQ");
+    while (postQ.size > 0) {
+      let n = postQ.pop();
+      // console.log("Propagating caused change", n, "...");
+      // console.log(
+      //   "  AFTER: ",
+      //   this.namesFromChoices(this.getChoices(n.x, n.y))
+      // );
+
+      const entropyValue = this.getCellEntropy(n.x, n.y);
+      this.entropy._data[n.x][n.y] = entropyValue;
+      if (entropyValue > 1) {
+        this.minEntropy.add(
+          this.invIndex._data[n.x][n.y],
+          this.applyEntropyModifiers(entropyValue, {
+            painted: this.painted._data[n.x][n.y],
+          })
+        );
+      } else {
+        this.painted._data[n.x][n.y] = 0;
+        this.minEntropy.del(this.invIndex._data[n.x][n.y]);
+      }
+      try {
+        this.entropyImage.subset(
+          index(n.y, n.x, this.COLOR),
+          entropyValue <= this.entropyColors.length
+            ? this.entropyColors[round(entropyValue) - 1]
+            : [0, 0, 0, 255]
+        );
+      } catch {
+        this.entropyImage.subset(index(n.y, n.x, this.COLOR), [255, 0, 0, 255]);
+      }
+    }
+    this.propagate(P, false);
+  }
+
+  propagate(targets, painted = false) {
+    const q = new Deque(targets);
+    const postQ = new Deque();
+
     while (q.size > 0) {
       const p = q.pop();
 
       this.offsets.forEach((o, k) => {
         const nx = p.x + o.x;
         const ny = p.y + o.y;
-        if (nx >= 0 && nx < this.gridSize && ny >= 0 && ny < this.gridSize) {
-          const pre = squeeze(this.choices.subset(index(nx, ny, this.ALL)));
-          const cur = squeeze(this.choices.subset(index(p.x, p.y, this.ALL)));
 
-          // If the neighbouring tile is not at a leaf yet (1 choice), or is not contradicting (0 choices)
-          // TODO: refine this definition, 1 choice can also mean meta-tile that is unable to collapse downwards
-          if (sum(pre) > 1) {
-            // console.log();
-            // const curChosen = this.chosen.get([p.x, p.y]);
-            // cur.set([curChosen], this.LM.get([curChosen]));
-            // const allowed = map(apply(and(cur, this.adjaug), 1, sum), sign);
-            let allowedAdjacencies = zeros(this.gridChoices);
-            // console.log(cur._data);
-            //
-            for (const idx of this.indices(cur._data)) {
-              // if (
-              //   idx == this.chosen.subset(index(p.x, p.y)) &&
-              //   !this.LM.get([idx])
-              // ) {
-              //   continue;
-              // }
+        if (nx >= 0 && nx < this.gridWidth && ny >= 0 && ny < this.gridHeight) {
+          var diff = this.eigenGrid.propagate(
+            p.x,
+            p.y,
+            nx,
+            ny,
+            this.eigenOffsets[k]
+          );
 
-              // // Path Check
-              // let skip = false;
-              // if (!this.LM.get([idx])) {
-              //   // TODO: precompute leaves per node
-              //   // const possibleLeaves = [];
-              //   let c = 0;
-              //   const leaves = this.nodeIndex[this.nameIndex[idx]]
-              //     .leaves()
-              //     .map((l) => l.index);
-              //   for (const leafidx of leaves) {
-              //     if (this.pathMap.get(leafidx).has(idx)) {
-              //       const path = this.pathMap.get(leafidx).get(idx);
-              //       if (sum(and(path, cur)) <= sum(path)) {
-              //         // possibleLeaves.push(leafidx);
-
-              //         // Ironically this works, because all meta-tile adjacencies are composed of the adjacencies of their children...
-              //         skip = true;
-              //         c += 1;
-              //         // adjacencies.set([leafidx]);
-              //       }
-              //     }
-              //   }
-              //   if (c == 0) {
-              //     skip = true;
-              //   }
-
-              //   //   // Rebuild adjacencies -- Slowwwww
-              //   //   // let newadj = zeros(this.gridChoices);
-              //   //   // for (const leafidx of possibleLeaves) {
-              //   //   //   const path = this.pathMap.get(leafidx).get(idx);
-              //   //   //   newadj = add(
-              //   //   //     newadj,
-              //   //   //     map(apply(and(path, this.adj), 1, sum), sign)
-              //   //   //   );
-              //   //   // }
-              //   //   // adjacencies = newadj;
-              // }
-
-              // if (skip) {
-              //   continue;
-              // }
-
-              // allowedAdjacencies = add(allowedAdjacencies, adjacencies);
-              if (this.LM.get([idx])) {
-                let adjacencies = squeeze(
-                  this.adjaug.get(k).subset(index(idx, this.ALL))
-                );
-                allowedAdjacencies = add(allowedAdjacencies, adjacencies);
-              }
-            }
-            // console.log(allowed, allowedAdjacencies);
-            // Path check (can be faster)
-            // const asum = sum(allowed);
-            // const prunedAllowed = clone(allowed);
-            // const leafCounters = {};
-            // for (const allowedIndex of this.indices(allowed._data, 1)) {
-            //   // if (leafIndices.has(allowedIndex)) {
-            //   //   continue;
-            //   // }
-            //   leafCounters[allowedIndex] =
-            //     this.nodeIndex[this.nameIndex[allowedIndex]].leaves().size;
-            //   for (const leafIndex of leafIndices) {
-            //     const paths = this.pathMap.get(leafIndex);
-            //     let count = 0;
-            //     for (const [index, path] of paths) {
-            //       if (sum(and(path, allowed)) == sum(path)) {
-            //         count += 1;
-            //       }
-            //     }
-
-            //     // console.log(
-            //     //   allowedIndex,
-            //     //   leafIndex,
-            //     //   path,
-            //     //   allowed,
-            //     //   sum(and(path, allowed)),
-            //     //   sum(path)
-            //     // );
-
-            //     // console.log(count, paths.size);
-            //     if (count == 0) {
-            //       // Here we know there is no available path from this metatile to the leaf of leafIndex
-            //       leafCounters[allowedIndex] -= 1;
-            //     }
-            //   }
-            //   // console.log(leafCount);
-            //   if (leafCounters[allowedIndex] <= 0) {
-            //     // console.log(leafCount);
-            //     prunedAllowed.set([allowedIndex], false);
-
-            //     // console.log(
-            //     //   "?",
-            //     //   leafCounters[allowedIndex],
-            //     //   this.nameIndex[allowedIndex]
-            //     // );
-            //   }
-            // }
-
-            // Path check second attempt...
-
-            // const currentTileIndices = this.indices(cur._data, 1);
-            // let accCur = zeros(this.gridChoices);
-            // for (const index of currentTileIndices) {
-            //   accCur = add(
-            //     accCur,
-            //     apply(and(this.SM[index], this.adj), 1, sum)
-            //   );
-            // }
-
-            // const preTileIndices = this.indices(pre._data, 1);
-            // let accPre = zeros(this.gridChoices);
-            // for (const index of preTileIndices) {
-            //   accPre = add(
-            //     accPre,
-            //     apply(and(this.SM[index], this.adj), 1, sum)
-            //   );
-            // }
-            // console.log(map(add(accCur, allowed), sign));
-            // console.log(map(add(accPre, pre), sign));
-            // console.log("sep");
-
-            const post = and(pre, allowedAdjacencies);
-            for (const idx of this.indices(post._data, true)) {
-              if (!this.LM.get([idx]) && sum(and(this.CM[idx], post)) === 0) {
-                post.set([idx], false);
-              }
-            }
-            // Algo
-            // 1.) get the indices of the currently allowed tiles
-            // 2.) get all their submasks; these indicate which tiles are all in their subtree
-            // 3.) for each of these we would like to select the associated adjacencies
-
-            // TODO: Remove childless metatiles after determining which ones are allowed
-            // TODO: Think of a better way to handle this?
-            // console.log("SUMXOR:", sum(xor(pre, post)));
-            if (sum(xor(pre, post)) > 0) {
-              const newChoices = map(post, sign);
-              this.choices.subset(index(nx, ny, this.ALL), newChoices);
-              if (painted) {
-                this.painted._data[nx][ny] = 1;
-              }
-              const entropyValue = this.getCellEntropy(nx, ny);
-              this.entropy._data[nx][ny] = entropyValue;
-              if (entropyValue > 1) {
-                // console.log("P-ADD:", nx, ny, "|", entropyValue);
-
-                this.minEntropy.add(
-                  this.invIndex._data[nx][ny],
-                  this.applyEntropyModifiers(entropyValue, {
-                    painted: this.painted._data[nx][ny],
-                  })
-                );
-              } else {
-                // console.log("P-DEL:", nx, ny, "|", entropyValue);
-                this.painted._data[nx][ny] = 0;
-                this.minEntropy.del(this.invIndex._data[nx][ny]);
-              }
-              // if (entropyValue > 1 && entropyValue < this.minEntropy.value) {
-              //   this.minEntropy = new CellEntropy(
-              //     this.targets.get([nx, ny]),
-              //     entropyValue
-              //   );
-              // }
-              // console.log(
-              //   "BUFFERING FROM PROPAGATION AT:",
-              //   nx,
-              //   ny,
-              //   "FROM",
-              //   p.x,
-              //   p.y
-              // );
-              // this.bufferEntropy(nx, ny, entropyValue);
-              // this.entropyQT.set(this.targets.get([nx, ny]), entropyValue);
-              q.push(new Target(nx, ny));
-              try {
-                this.entropyImage.subset(
-                  index(nx, ny, this.COLOR),
-                  entropyValue <= this.entropyColors.length
-                    ? this.entropyColors[round(entropyValue) - 1]
-                    : [0, 0, 0, 255]
-                );
-              } catch {
-                this.entropyImage.subset(
-                  index(nx, ny, this.COLOR),
-                  [255, 0, 0, 255]
-                );
-              }
-
-              // this.entropyImage.subset(
-              //   index(nx, ny, this.COLOR),
-              //   dotMultiply(this.entropyColors[this.entropy.get([nx, ny])], 255)
-              // );
-              const count = sum(post);
-              if (count == 1) {
-                const choice = post._data.indexOf(true);
-
-                this.image.subset(index(nx, ny, this.COLOR), [
-                  this.colorMap[choice],
-                ]);
-                this.chosen.subset(index(nx, ny), choice);
-              }
-
-              if (count == 0) {
-                this.image.subset(index(nx, ny, this.COLOR), [
-                  [255, 0, 0, 255], //TODO: Would be nice to keep these special colors in a list
-                ]);
-              }
-            }
+          if (diff) {
+            // console.log("Propagating caused change", p, "...");
+            // console.log(
+            //   "  BEFORE: ",
+            //   this.namesFromChoices(this.getChoices(nx, ny))
+            // );
+            var neighbour = new Target(nx, ny);
+            postQ.push(neighbour);
+            q.push(neighbour);
           }
         }
       });
     }
+
+    // Copy choices
+    this.choices = this.eigenGrid.getChoices();
+
+    // console.time("postQ");
+    while (postQ.size > 0) {
+      let n = postQ.pop();
+      // console.log("Propagating caused change", n, "...");
+      // console.log(
+      //   "  AFTER: ",
+      //   this.namesFromChoices(this.getChoices(n.x, n.y))
+      // );
+
+      const entropyValue = this.getCellEntropy(n.x, n.y);
+      this.entropy._data[n.x][n.y] = entropyValue;
+      if (entropyValue > 1) {
+        this.minEntropy.add(
+          this.invIndex._data[n.x][n.y],
+          this.applyEntropyModifiers(entropyValue, {
+            painted: this.painted._data[n.x][n.y],
+          })
+        );
+      } else {
+        this.painted._data[n.x][n.y] = 0;
+        this.minEntropy.del(this.invIndex._data[n.x][n.y]);
+      }
+      try {
+        this.entropyImage.subset(
+          index(n.y, n.x, this.COLOR),
+          entropyValue <= this.entropyColors.length
+            ? this.entropyColors[round(entropyValue) - 1]
+            : [0, 0, 0, 255]
+        );
+      } catch {
+        // CONTRADICTION
+        console.log("Contradiction! Undoing...");
+        this.undo();
+        return;
+        this.entropyImage.subset(index(n.x, n.y, this.COLOR), [255, 0, 0, 255]);
+      }
+    }
+    // console.timeEnd("postQ");
   }
+
+  // waitForUnlock() {
+  //   const poll = (resolve) => {
+  //     if (!this.lock) resolve();
+  //     else setTimeout((_) => poll(resolve), 400);
+  //   };
+  //   return new Promise(poll);
+  // }
 }
