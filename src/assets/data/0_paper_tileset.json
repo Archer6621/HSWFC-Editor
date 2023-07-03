@@ -3,6 +3,7 @@
     "root": {
       "paintable": true,
       "generate": true,
+      "meta": true,
       "color": [0, 0, 0],
       "children": { "water": 0.1, "land": 1, "village": 0.00000001 },
       "adjacencies": {
@@ -15,6 +16,7 @@
     "forest": {
       "paintable": true,
       "generate": true,
+      "meta": true,
       "color": [100, 230, 100],
       "children": { "grass": 1, "tree": 1 },
       "adjacencies": {
@@ -27,6 +29,7 @@
     "land": {
       "paintable": true,
       "generate": true,
+      "meta": true,
       "color": [190, 190, 190],
       "children": { "grass": 1, "forest": 0.1, "sand": 0.1 },
       "adjacencies": {
@@ -39,6 +42,7 @@
     "grass": {
       "paintable": true,
       "generate": true,
+      "meta": false,
       "color": [50, 130, 50],
       "children": {},
       "adjacencies": {
@@ -51,6 +55,7 @@
     "sand": {
       "paintable": true,
       "generate": true,
+      "meta": false,
       "color": [120, 120, 50],
       "children": {},
       "adjacencies": {
@@ -63,6 +68,7 @@
     "water": {
       "paintable": true,
       "generate": true,
+      "meta": false,
       "color": [70, 70, 255],
       "children": {},
       "adjacencies": {
@@ -75,6 +81,7 @@
     "tree": {
       "paintable": true,
       "generate": true,
+      "meta": false,
       "color": [20, 70, 20],
       "children": {},
       "adjacencies": {
@@ -87,6 +94,7 @@
     "village": {
       "paintable": true,
       "generate": true,
+      "meta": true,
       "color": [190, 0, 190],
       "children": { "water": 0.25, "sand": 0.25, "grass": 2, "house": 0.5 },
       "adjacencies": {
@@ -99,6 +107,7 @@
     "house": {
       "paintable": true,
       "generate": true,
+      "meta": true,
       "color": [190, 150, 120],
       "children": {
         "wall": 0.000001,
@@ -116,6 +125,7 @@
     "wall": {
       "paintable": true,
       "generate": true,
+      "meta": true,
       "color": [120, 120, 120],
       "children": {
         "wHT": 1,
@@ -141,6 +151,7 @@
     "wallConvex": {
       "paintable": false,
       "generate": true,
+      "meta": true,
       "color": [120, 120, 120],
       "children": {
         "wHT": 1,
@@ -162,6 +173,7 @@
     "wHT": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [140, 90, 60],
       "children": {},
       "adjacencies": {
@@ -174,6 +186,7 @@
     "wHB": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [140, 90, 60],
       "children": {},
       "adjacencies": {
@@ -186,6 +199,7 @@
     "wVL": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [140, 90, 60],
       "children": {},
       "adjacencies": {
@@ -198,6 +212,7 @@
     "wVR": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [140, 90, 60],
       "children": {},
       "adjacencies": {
@@ -210,6 +225,7 @@
     "cTL": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -222,6 +238,7 @@
     "cTR": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -234,6 +251,7 @@
     "cBL": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -246,6 +264,7 @@
     "cBR": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -258,6 +277,7 @@
     "icTL": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -270,6 +290,7 @@
     "icTR": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -282,6 +303,7 @@
     "icBR": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -294,6 +316,7 @@
     "icBL": {
       "paintable": false,
       "generate": true,
+      "meta": false,
       "color": [120, 70, 40],
       "children": {},
       "adjacencies": {
@@ -306,6 +329,7 @@
     "floor": {
       "paintable": true,
       "generate": true,
+      "meta": false,
       "color": [120, 120, 60],
       "children": {},
       "adjacencies": {
