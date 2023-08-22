@@ -21,6 +21,7 @@
     "denque": "^2.1.0",
     "double-ended-queue": "^2.1.0-0",
     "eigen": "https://github.com/Archer6621/eigen-js",
+    "hex-rgb": "^5.0.0",
     "hue-map": "^1.0.0",
     "immutable": "^4.2.4",
     "mathjs": "11.7.0",
@@ -32,6 +33,7 @@
     "sorted-btree": "^1.8.1",
     "sorted-set": "^0.3.0",
     "util": "^0.12.5",
+    "uuid": "^9.0.0",
     "vue": "3",
     "vue-focus-lock": "^2.0.5",
     "vue-router": "4"

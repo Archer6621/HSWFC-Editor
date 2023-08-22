@@ -20,6 +20,7 @@ import {
   sqrt,
   setCartesian,
   map,
+  bitOr,
   sign,
   round,
   matrix,
@@ -409,17 +410,17 @@ export class Grid {
     this.eigenOffsets = { D: 0, U: 2, L: 1, R: 3 };
 
     this.colorMap = new Array(this.gridChoices);
-    this.allowed = new Array(this.gridChoices);
+    // this.allowed = new Array(this.gridChoices);
     this.nameIndex = new Array(this.gridChoices);
     this.invertedIndex = invertedIndex;
     for (const name in tileset) {
       const tile = tileset[name];
       tile.color.push(255);
       this.colorMap[invertedIndex[name]] = tile.color;
-      this.allowed[invertedIndex[name]] = tile.generate;
+      // this.allowed[invertedIndex[name]] = tile.generate;
       this.nameIndex[invertedIndex[name]] = name;
     }
-    console.log(this.allowed);
+    // console.log(this.allowed);
 
     // Build the DAG
     this.nodeIndex = {};
@@ -452,17 +453,17 @@ export class Grid {
     this.pathMap = new Map();
     for (const n in this.nodeIndex) {
       const node = this.nodeIndex[n];
-      console.log("LEAF: ", this.nameIndex[node.index]);
+      // console.log("LEAF: ", this.nameIndex[node.index]);
       let tempMap = new Map();
       let q = [node];
       tempMap = tempMap.set(node.index, [[node]]);
 
       while (q.length > 0) {
         const n = q.pop();
-        console.log("  popped", this.nameIndex[n.index]);
+        // console.log("  popped", this.nameIndex[n.index]);
 
         if (!tempMap.has(n.index)) {
-          console.log("  initializing...");
+          // console.log("  initializing...");
           tempMap = tempMap.set(n.index, []);
         }
 
@@ -470,7 +471,7 @@ export class Grid {
           if (tempMap.has(c.index)) {
             const cpaths = tempMap.get(c.index);
             for (const cpath of cpaths) {
-              console.log("    pushing", [...cpath, n]);
+              // console.log("    pushing", [...cpath, n]);
               tempMap.get(n.index).push([...cpath, n]);
             }
           }
@@ -495,17 +496,20 @@ export class Grid {
     }
 
     // NOTE: If the adjacencies are bad, a giant propagation wave can be triggered right at the start, explains the lag-spike
-    this.adj = new Map();
-    this.adjaug = new Map();
-    this.offsets.forEach((_, key) => {
-      const mat = matrix(adjacencies[key]._data);
-      this.adj = this.adj.set(key, mat);
-      this.adjaug = this.adjaug.set(key, clone(mat));
-    });
+    this.adjacenciesmeta = {};
+    for (const meta in adjacencies) {
+      let adj = new Map();
+      // const adjaug = new Map();
+      this.offsets.forEach((_, key) => {
+        const mat = matrix(adjacencies[meta][key]._data);
+        adj = adj.set(key, mat);
+        // this.adjaug = this.adjaug.set(key, clone(mat));
+      });
+      this.adjacenciesmeta[invertedIndex[meta]] = adj;
+    }
 
-    // Augment the adjacencies
+    // Each meta-tile's ADJ matrix should be the union of its children and itself
     this.offsets.forEach((_, key) => {
-      console.log(key);
       const q = [];
       for (const leaf of this.root.leaves().keys()) {
         for (const parent of leaf.incoming.keys()) {
@@ -517,34 +521,67 @@ export class Grid {
         const node = nodes[0];
         const child = nodes[1];
 
-        // const allowed = map(apply(and(cur, this.adj), 1, sum), sign);
-
-        const augmentedH = squeeze(
-          map(
-            add(
-              this.adjaug.get(key).subset(index(child.index, this.ALL)),
-              this.adjaug.get(key).subset(index(node.index, this.ALL))
-            ),
-            sign
+        this.adjacenciesmeta[node.index] = this.adjacenciesmeta[node.index].set(
+          key,
+          bitOr(
+            this.adjacenciesmeta[node.index].get(key),
+            this.adjacenciesmeta[child.index]?.get(key) ??
+              zeros(this.gridChoices, this.gridChoices)
           )
         );
-        const augmentedV = squeeze(
-          map(
-            add(
-              this.adjaug.get(key).subset(index(this.ALL, child.index)),
-              this.adjaug.get(key).subset(index(this.ALL, node.index))
-            ),
-            sign
-          )
-        );
-        this.adjaug.get(key).subset(index(node.index, this.ALL), augmentedH);
-        this.adjaug.get(key).subset(index(this.ALL, node.index), augmentedV);
 
         for (const parent of node.incoming.keys()) {
           q.push([parent, node]);
         }
       }
     });
+
+    // Augment the adjacencies
+    for (const meta in this.adjacenciesmeta) {
+      const adjaug = this.adjacenciesmeta[meta];
+      this.offsets.forEach((_, key) => {
+        console.log(key);
+        const q = [];
+        for (const leaf of this.root.leaves().keys()) {
+          for (const parent of leaf.incoming.keys()) {
+            q.push([parent, leaf]);
+          }
+        }
+        while (q.length > 0) {
+          const nodes = q.pop();
+          const node = nodes[0];
+          const child = nodes[1];
+
+          // const allowed = map(apply(and(cur, this.adj), 1, sum), sign);
+
+          const augmentedH = squeeze(
+            map(
+              add(
+                adjaug.get(key).subset(index(child.index, this.ALL)),
+                adjaug.get(key).subset(index(node.index, this.ALL))
+              ),
+              sign
+            )
+          );
+          const augmentedV = squeeze(
+            map(
+              add(
+                adjaug.get(key).subset(index(this.ALL, child.index)),
+                adjaug.get(key).subset(index(this.ALL, node.index))
+              ),
+              sign
+            )
+          );
+          adjaug.get(key).subset(index(node.index, this.ALL), augmentedH);
+          adjaug.get(key).subset(index(this.ALL, node.index), augmentedV);
+
+          for (const parent of node.incoming.keys()) {
+            q.push([parent, node]);
+          }
+        }
+      });
+    }
+    console.log("ADJSS", this.adjacenciesmeta);
 
     // for (const node of this.root.leaves()) {
     //   console.log(
@@ -577,10 +614,10 @@ export class Grid {
 
   // INDEXING SCHEME - COLMAJOR
   //        __________
-  //     1X/_________/|
-  //      /_________/||
-  //      | 3C -->  |||
-  //    2Y|         ||/
+  //     1X/         /|
+  //      /_________/ |
+  //      | 3C -->  | |
+  //    2Y|         | /
   //      |_________|/
   //
   //  Formula: c + C * y + C * Y * x
@@ -619,7 +656,8 @@ export class Grid {
     this.eigSM = new eig.BoolMatrix(this.gridChoices, this.gridChoices);
     this.CM = {};
     this.eigCM = new eig.BoolMatrix(this.gridChoices, this.gridChoices);
-    this.LM = new eig.BoolMatrix(this.gridChoices, 1); //zeros(this.gridChoices);
+    this.LM = zeros(this.gridChoices);
+    this.eigLM = new eig.BoolMatrix(this.gridChoices, 1); //zeros(this.gridChoices);
     for (const n in this.tileset) {
       const node = this.nodeIndex[n];
       const children = [];
@@ -640,24 +678,33 @@ export class Grid {
       this.SM[node.index] = subMask;
       this.CM[node.index] = childMask;
       if (node.outgoing.size == 0) {
-        this.LM.set(node.index, 1);
+        this.eigLM.set(node.index, 1);
+        this.LM.set([node.index], 1);
       }
     }
 
-    // Copy masks/adjacencies to eigen matrices
+    // Create grid
     this.eigenGrid = new eig.Grid(
       this.gridWidth,
       this.gridHeight,
       this.gridChoices,
-      new eig.BoolMatrix(this.adjaug.get("U")._data),
-      new eig.BoolMatrix(this.adjaug.get("R")._data),
-      new eig.BoolMatrix(this.adjaug.get("D")._data),
-      new eig.BoolMatrix(this.adjaug.get("L")._data),
       this.eigCM,
       this.eigSM,
-      this.LM
+      this.eigLM
     );
 
+    // Set adjacencies
+    console.log("ADJ", this.adjacenciesmeta);
+    for (const meta in this.adjacenciesmeta) {
+      const adj = this.adjacenciesmeta[meta];
+      this.eigenGrid.setAdjacencyData(
+        parseInt(meta),
+        new eig.BoolMatrix(adj.get("U")._data),
+        new eig.BoolMatrix(adj.get("R")._data),
+        new eig.BoolMatrix(adj.get("D")._data),
+        new eig.BoolMatrix(adj.get("L")._data)
+      );
+    }
     // set choices
     this.choices = this.eigenGrid.getChoices();
 
@@ -700,6 +747,7 @@ export class Grid {
 
     ///////////////////////////////////////////////
     const rootChoices = this.SM[this.root.index]._data;
+    rootChoices[0] = 1;
 
     // TODO: This can be done more efficiently
     for (let x = 0; x < this.gridWidth; x++) {
@@ -849,7 +897,7 @@ export class Grid {
 
     const choices = this.getChoices(x, y); //this.choices.subset(index(x, y, this.ALL));
     const s = sum(choices);
-    if (s <= 1) {
+    if (s <= 0) {
       return -Infinity;
     }
     return s;
@@ -897,9 +945,9 @@ export class Grid {
         if (le !== undefined) {
           t.x = le.x;
           t.y = le.y;
-          // /          console.log(t);
+          const meta = this.chosen._data[t.x][t.y];
           this.collapse([t]);
-          this.propagate([t]);
+          this.propagate([t], meta);
         }
       }
     }
@@ -1036,8 +1084,13 @@ export class Grid {
       //
       this.uncollapse(replaceBinUp);
       this.depropagate(replaceBinUp);
-      this.collapse(replaceBinDown, true);
-      this.propagate(replaceBinDown);
+
+      for (const c of replaceBinDown) {
+        const meta = this.chosen._data[c.x][c.y];
+        console.log(meta);
+        this.collapse([c], true);
+        this.propagate([c], meta);
+      }
     }
     // Uncollapse
     if (uncollapseBin.length > 0) {
@@ -1046,23 +1099,61 @@ export class Grid {
     }
     // Regular collapse
     if (collapseBin.length > 0) {
+      const meta = this.chosen._data[collapseBin[0].x][collapseBin[0].y];
+      console.log(meta);
+
       this.collapse(collapseBin, true);
-      this.propagate(collapseBin);
+      this.propagate(collapseBin, meta);
     }
   }
 
   collapse(targets, manual = false) {
     for (let t of targets) {
+      this.checkpoint();
       const x = t.x;
       const y = t.y;
       const tile_index = t.tile_index;
       let choices = this.getChoices(x, y);
-      if (!manual) {
-        choices = this.getChoices(x, y);
-      }
       const currentTile = this.chosen._data[x][y];
-
       const childMask = clone(this.CM[currentTile]);
+
+      // Neighbour-check; ephemeral state generation for per meta-tile adjacency - pre-filtering
+      // TODO: Revise, it needs to be correct...
+      const meta = this.chosen._data[x][y];
+      const adj = this.adjacenciesmeta[meta];
+      for (const possibleChoice of this.indices(choices)) {
+        this.offsets.forEach((o, k) => {
+          const nx = t.x + o.x;
+          const ny = t.y + o.y;
+          if (
+            nx >= 0 &&
+            nx < this.gridWidth &&
+            ny >= 0 &&
+            ny < this.gridHeight
+          ) {
+            const nc = this.getChoices(nx, ny);
+
+            let allowedAdjacencies = zeros(this.gridChoices);
+            for (const idx of this.indices(nc)) {
+              let adjacencies = squeeze(
+                adj.get(k).subset(index([idx], this.ALL))
+              );
+              if (this.LM.get([idx])) {
+                allowedAdjacencies = add(allowedAdjacencies, adjacencies);
+              }
+            }
+
+            let res = and(allowedAdjacencies, choices);
+            let SMwithcurrent = this.SM[possibleChoice];
+            SMwithcurrent.set([possibleChoice], true);
+            res = and(res, SMwithcurrent);
+            res = and(res, this.LM);
+            choices = and(choices, res);
+            console.log("UPDATED CHOICES", k, res, "/\\", choices);
+          }
+        });
+      }
+      choices.set([currentTile], true);
 
       // Apply weights
       if (!manual) {
@@ -1314,10 +1405,10 @@ export class Grid {
     this.propagate(P, false);
   }
 
-  propagate(targets, painted = false) {
+  propagate(targets, meta) {
     const q = new Deque(targets);
     const postQ = new Deque();
-
+    // console.log("META:", meta);
     while (q.size > 0) {
       const p = q.pop();
 
@@ -1331,8 +1422,12 @@ export class Grid {
             p.y,
             nx,
             ny,
-            this.eigenOffsets[k]
+            this.eigenOffsets[k],
+            meta
           );
+
+          var neighbour = new Target(nx, ny);
+          postQ.push(neighbour);
 
           if (diff) {
             // console.log("Propagating caused change", p, "...");
@@ -1340,8 +1435,7 @@ export class Grid {
             //   "  BEFORE: ",
             //   this.namesFromChoices(this.getChoices(nx, ny))
             // );
-            var neighbour = new Target(nx, ny);
-            postQ.push(neighbour);
+
             q.push(neighbour);
           }
         }
@@ -1354,11 +1448,6 @@ export class Grid {
     // console.time("postQ");
     while (postQ.size > 0) {
       let n = postQ.pop();
-      // console.log("Propagating caused change", n, "...");
-      // console.log(
-      //   "  AFTER: ",
-      //   this.namesFromChoices(this.getChoices(n.x, n.y))
-      // );
 
       const entropyValue = this.getCellEntropy(n.x, n.y);
       this.entropy._data[n.x][n.y] = entropyValue;
@@ -1373,20 +1462,21 @@ export class Grid {
         this.painted._data[n.x][n.y] = 0;
         this.minEntropy.del(this.invIndex._data[n.x][n.y]);
       }
-      try {
-        this.entropyImage.subset(
-          index(n.y, n.x, this.COLOR),
-          entropyValue <= this.entropyColors.length
-            ? this.entropyColors[round(entropyValue) - 1]
-            : [0, 0, 0, 255]
-        );
-      } catch {
-        // CONTRADICTION
-        console.log("Contradiction! Undoing...");
-        this.undo();
+
+      if (entropyValue === -Infinity) {
+        // console.log("Contradiction! Undoing...");
+        // this.undo();
+
+        console.log("CONTRADICTION: ", targets, meta);
         return;
-        this.entropyImage.subset(index(n.x, n.y, this.COLOR), [255, 0, 0, 255]);
       }
+
+      this.entropyImage.subset(
+        index(n.y, n.x, this.COLOR),
+        entropyValue <= this.entropyColors.length
+          ? this.entropyColors[round(entropyValue) - 1]
+          : [0, 0, 0, 255]
+      );
     }
     // console.timeEnd("postQ");
   }
