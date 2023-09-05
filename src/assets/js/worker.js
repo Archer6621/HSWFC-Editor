@@ -10,8 +10,17 @@ self.onmessage = ({ data: { question, value, cells } }) => {
     const tileset = value[2];
     const adjacencies = value[3];
     const index = value[4];
+    const overrides = value[5];
 
-    grid = new Grid(width, height, tileset, adjacencies, index, autoStepSize);
+    grid = new Grid(
+      width,
+      height,
+      tileset,
+      adjacencies,
+      index,
+      autoStepSize,
+      overrides
+    );
 
     grid.initialize().then(() => {
       self.postMessage({
@@ -20,13 +29,14 @@ self.onmessage = ({ data: { question, value, cells } }) => {
       });
     });
   } else if (question === "update") {
-    const modifiedCells = grid.update();
+    const [modifiedCells, contradictions] = grid.update();
     self.postMessage({
       grid: {
         ...grid.getState(),
         canRedo: grid.redoStack.length > 0,
         canUndo: grid.undoStack.length > 0,
         modifiedCells: modifiedCells,
+        contradictions: contradictions,
       },
       message: "doneUpdate",
     });

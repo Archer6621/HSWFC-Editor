@@ -44,6 +44,8 @@ module.exports = configure(function (/* ctx */) {
 
       "roboto-font", // optional, you are not bound to it
       "material-icons", // optional, you are not bound to it
+      "material-symbols-rounded",
+
       "fontawesome-v6",
     ],
 

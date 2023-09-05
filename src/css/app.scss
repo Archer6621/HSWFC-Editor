@@ -1,7 +1,12 @@
 // app global css in SCSS form
 
-.toolbarArea {
-  grid-area: header;
+.header {
+  min-height: 100%;
+
+  max-height: 5vh;
+  @media screen and (orientation: portrait) {
+    max-height: 5vw;
+  }
 }
 
 .footerArea {
@@ -55,6 +60,16 @@
   border-image: linear-gradient(to bottom, lightgray, rgba(0, 0, 0, 0)) 1 100%;
 }
 
+.canvasHeader {
+  position: relative;
+  background-color: lighten(lightgray, 15%);
+  justify-content: stretch;
+  grid-area: canvasHeader;
+  border: 1px solid lightgray;
+  border-width: 0px 2px;
+  border-image: linear-gradient(to bottom, lightgray, rgba(0, 0, 0, 0)) 1 100%;
+}
+
 .canvasHolder {
   position: absolute;
   margin: auto;
@@ -76,20 +91,37 @@ canvas {
 
 .mainGrid {
   position: relative;
-  height: 100vh;
+  height: 95vh;
   width: 100vw;
   @media screen and (orientation: portrait) {
-    height: 100vw;
+    height: 95vw;
     width: 100vh;
   }
   display: grid;
   grid-template-columns: minmax(150px, 0.75fr) 2fr minmax(200px, 1fr);
-  grid-template-rows: auto 1fr 0.2fr 32px;
+  grid-template-rows: 1fr 0.2fr 32px;
   grid-template-areas:
-    "header header  header"
     "settings canvas  tiles"
     "settings controls tiles"
-    "footer footer  footer";
+    "footer footer footer";
+}
+
+.inputGrid {
+  position: relative;
+  height: 95vh;
+  width: 100vw;
+  @media screen and (orientation: portrait) {
+    height: 95vw;
+    width: 100vh;
+  }
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) 2fr minmax(200px, 1fr);
+  grid-template-rows: 0.05fr 1fr 0.2fr 32px;
+  grid-template-areas:
+    "settings canvasHeader tiles"
+    "settings canvas  tiles"
+    "settings controls tiles"
+    "footer footer footer";
 }
 
 .q-tree__node-header:has(div > .selectedtree) {
@@ -100,7 +132,24 @@ canvas {
 .selectedtree {
   color: $yellow-10;
 }
+.q-tree__node-header:has(div > .selectedlayer) {
+  // background-color: lighten($yellow-10, 30);
+  transition: background-color 0.5s;
+  box-shadow: 0px 0px 0px 2px $yellow-10;
+  // border: 2px solid $yellow-10;  // Border messes up the layout
+  // cursor: crosshair;
+}
+.selectedlayer {
+  color: lighten($purple, 20);
+  // border-bottom: 2px solid $yellow-10;
+}
 
+.selectedlayer::after {
+  content: "EDITING LAYER";
+  padding-left: 10px;
+  color: $yellow-10;
+  font-weight: 1000;
+}
 .prb0:after {
   content: "";
   background-image: url("/minusminus.svg");
@@ -163,7 +212,7 @@ canvas {
 html,
 body {
   overscroll-behavior: none;
-  overflow: hidden;
+  // overflow: hidden;
 }
 
 .buttonToggleMW {
@@ -172,6 +221,30 @@ body {
 
 .buttonToggleMW > button {
   min-width: 32px !important;
+}
+
+.buttonToggleUnallocated {
+  flex-wrap: wrap;
+}
+
+.buttonToggleUnallocated > button {
+  width: 48px;
+  height: 48px;
+  padding: 0px;
+  min-width: 0px;
+  min-height: 0px;
+}
+
+.buttonToggleTools {
+  flex-wrap: wrap;
+}
+
+.buttonToggleTools > button {
+  width: 32px;
+  height: 32px;
+  padding: 0px;
+  min-width: 0px;
+  min-height: 0px;
 }
 
 @media screen and (orientation: portrait) {
@@ -185,4 +258,14 @@ body {
     top: 100%;
     left: 0;
   }
+}
+
+.active-layer {
+  color: white;
+  background: $primary;
+}
+
+.disabledroot {
+  filter: grayscale(1);
+  cursor: not-allowed;
 }
