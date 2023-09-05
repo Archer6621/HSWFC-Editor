@@ -253,6 +253,7 @@
               "
               icon="edit"
               size="xs"
+              title="Edit tile..."
               dense
               @click="
                 this.addtile = true;
@@ -1450,28 +1451,29 @@ export default defineComponent({
 
       arr[4 * this.mx + 4 * this.my * w + 3] = 255;
 
-      for (let p of this.paintBuffer) {
-        arr[4 * p[0] + 4 * p[1] * w] = 255;
-        arr[4 * p[0] + 4 * p[1] * w + 1] = 255;
+      if (this.tab === "environment") {
+        for (let p of this.paintBuffer) {
+          arr[4 * p[0] + 4 * p[1] * w] = 255;
+          arr[4 * p[0] + 4 * p[1] * w + 1] = 255;
 
-        arr[4 * p[0] + 4 * p[1] * w + 3] = 128;
+          arr[4 * p[0] + 4 * p[1] * w + 3] = 128;
+        }
+
+        for (let p of this.processBuffer) {
+          arr[4 * p[0] + 4 * p[1] * w + 1] =
+            100 + (155 * (1 + sin(this.time / 5))) / 2;
+          arr[4 * p[0] + 4 * p[1] * w + 2] = 255;
+
+          arr[4 * p[0] + 4 * p[1] * w + 3] = 128;
+        }
+
+        for (let p of this.contradictionBuffer) {
+          arr[4 * p[0] + 4 * p[1] * w + 0] =
+            100 + (155 * (1 + sin(this.time / 5))) / 2;
+
+          arr[4 * p[0] + 4 * p[1] * w + 3] = 255;
+        }
       }
-
-      for (let p of this.processBuffer) {
-        arr[4 * p[0] + 4 * p[1] * w + 1] =
-          100 + (155 * (1 + sin(this.time / 5))) / 2;
-        arr[4 * p[0] + 4 * p[1] * w + 2] = 255;
-
-        arr[4 * p[0] + 4 * p[1] * w + 3] = 128;
-      }
-
-      for (let p of this.contradictionBuffer) {
-        arr[4 * p[0] + 4 * p[1] * w + 0] =
-          100 + (155 * (1 + sin(this.time / 5))) / 2;
-
-        arr[4 * p[0] + 4 * p[1] * w + 3] = 255;
-      }
-
       const highlightImg = new ImageData(arr, w, h);
       ctx.putImageData(highlightImg, 0, 0);
     },
@@ -1723,9 +1725,13 @@ export default defineComponent({
         // };
 
         const node = nodes[name];
-
+        console.log("ADJACENCIES FOR:", name);
         for (const dir in node.adjacencies) {
+          console.log("  DIR:", dir);
+
           for (const adj of node.adjacencies[dir]) {
+            console.log("     - ", adj);
+
             const pair = adj.split(">-<");
             const index1 = invertedIndex[pair[0]];
             const index2 = invertedIndex[pair[1]];
@@ -1735,6 +1741,7 @@ export default defineComponent({
 
         adjmeta[name] = adjacencies;
       }
+      console.log("META ADJ:", adjmeta);
 
       // Get all possible paths from root
       // Lazy way to do it: just get all possible paths from the expanded tree, then eliminate paths that consist of the same IDs.
@@ -1807,15 +1814,39 @@ export default defineComponent({
           const cascadeKey = format(cascadeKeyArr);
           if (Object.values(cascades).length === 0) {
             firstKey = cascadeKey;
-            // Set adjacencies for the first one
+
             for (const dir in final_adjacencies) {
+              // Set adjacencies for the first one
+              console.log(
+                "Setting initial ADJ for",
+                dir,
+                key,
+                "H",
+                clone(
+                  adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
+                ),
+                "V",
+                clone(
+                  adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
+                )
+              );
               final_adjacencies[dir].subset(
                 index([parseInt(key)], range(0, nodeCount)),
-                adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
+                bitOr(
+                  final_adjacencies[dir].subset(
+                    index(parseInt(key), range(0, nodeCount))
+                  ),
+                  adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
+                )
               );
               final_adjacencies[dir].subset(
                 index(range(0, nodeCount), [parseInt(key)]),
-                adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
+                bitOr(
+                  final_adjacencies[dir].subset(
+                    index(range(0, nodeCount), parseInt(key))
+                  ),
+                  adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
+                )
               );
             }
           }
@@ -1824,7 +1855,10 @@ export default defineComponent({
           }
           // PATH, ADJ, NODE
           cascades[cascadeKey].push([path, clone(adj), path[path.length - 1]]);
+          console.log("CASC", key, clone(adj));
         }
+
+        console.log("ADJ AFTER INITIAL CASC", final_adjacencies);
 
         let indexCounter = nodeCount + Object.values(splits).length;
         console.log("COUNTER", indexCounter);
@@ -2457,15 +2491,18 @@ export default defineComponent({
             if (tileId > 0) {
               const name = index[`${tileId}`];
               const neighbours = {
-                U: l.matrix._data[i]?.[j - 1],
-                D: l.matrix._data[i]?.[j + 1],
-                L: l.matrix._data[i - 1]?.[j],
-                R: l.matrix._data[i + 1]?.[j],
+                U: [l.matrix._data[i]?.[j - 1], l.ghost._data[i]?.[j - 1]],
+                D: [l.matrix._data[i]?.[j + 1], l.ghost._data[i]?.[j + 1]],
+                L: [l.matrix._data[i - 1]?.[j], l.ghost._data[i - 1]?.[j]],
+                R: [l.matrix._data[i + 1]?.[j], l.ghost._data[i + 1]?.[j]],
               };
-              for (const n in neighbours) {
-                if (neighbours[n] > 0) {
-                  const neighbourName = index[neighbours[n]];
 
+              for (const n in neighbours) {
+                const ntile = neighbours[n][0];
+                const nghost = neighbours[n][1];
+
+                if (ntile > 0) {
+                  const neighbourName = index[ntile];
                   if (
                     nodes[metaName]["adjacencies"][n].findIndex(
                       (e) => e === `${name}>-<${neighbourName}`
@@ -2611,6 +2648,7 @@ export default defineComponent({
           this.height,
           setCartesian(range(0, this.width), range(0, this.height))._data
         );
+        this.contradictionBuffer = []; // TODO: Bit of a silly solution, but works for now
       }
     };
 
