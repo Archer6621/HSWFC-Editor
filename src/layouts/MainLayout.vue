@@ -1148,6 +1148,7 @@ import {
   floor,
   sin,
   clone,
+  square,
 } from "mathjs";
 import hexRgb from "hex-rgb";
 import rgbHex from "rgb-hex";
@@ -2961,6 +2962,14 @@ export default defineComponent({
           }
         }
       }
+
+      // Square all the probabilities
+      for (const node in nodes) {
+        for (const child in nodes.children) {
+          nodes.children[child] = square(nodes.children[child]);
+        }
+      }
+
       this.print(nodes);
       this.selectTileset({ nodes: nodes }, invertedIndex);
     },
