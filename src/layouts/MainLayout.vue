@@ -258,6 +258,10 @@
               @click="
                 this.addtile = true;
                 this.addtileop = 'edit';
+                this.addtilename = node.name;
+                this.addtilemeta = node.meta;
+                this.addtilecolor = this.rgbToHex(node.color);
+                this.addtilefile = undefined;
               "
             ></q-btn>
           </template>
@@ -1146,6 +1150,7 @@ import {
   clone,
 } from "mathjs";
 import hexRgb from "hex-rgb";
+import rgbHex from "rgb-hex";
 import download from "downloadjs";
 // import { v4 as uuidv4 } from "uuid";
 
@@ -1305,6 +1310,10 @@ export default defineComponent({
   },
 
   methods: {
+    rgbToHex(c) {
+      const cc = c.split(",").map((x) => parseInt(x));
+      return `#${rgbHex(...cc)}`;
+    },
     setProbMod() {
       console.log(
         "SETTING PROB MOD",
