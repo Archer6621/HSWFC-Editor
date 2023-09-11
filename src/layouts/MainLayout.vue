@@ -1134,6 +1134,7 @@ import {
   dotMultiply,
   bitOr,
   bitXor,
+  squeeze,
   reviver,
   ones,
   setCartesian,
@@ -1752,7 +1753,6 @@ export default defineComponent({
       let path = [];
       const branching_points = [];
       const paths = {}; // key is a node, value is a list of all the paths from root until this node
-      const metaPaths = {};
       while (stack.length > 0) {
         branching_points.shift();
         const node = stack.shift();
@@ -1770,12 +1770,13 @@ export default defineComponent({
           path = path.slice(0, branching_points[0]);
         }
       }
-
+      console.log("PATHS", paths);
       // Armed with all the possible paths in the DAG, we should cascade adjacencies on each of them
       // QUESTION:
       // - Do we do this for every tile? Or only for leaf tiles?
       // - If we do this for every tile, then we need the unfinished paths as well; it just means that above we make a record at every step instead of just when a path is finished.
       // - Lets start with just the leaves
+      const overrides = {};
       const final_adjacencies = {
         U: zeros(nodeCount, nodeCount),
         D: zeros(nodeCount, nodeCount),
@@ -1783,12 +1784,18 @@ export default defineComponent({
         R: zeros(nodeCount, nodeCount),
       };
 
-      const splits = {};
-      for (const key in paths) {
-        const cascades = {};
-        let firstKey;
-        for (const path of paths[key]) {
-          const pathKey = path.map((n) => n.key).join(".");
+      ////////////////////////
+      // CLUSTERING
+      /////////////////
+
+      // Iterate over leaves
+      const clusters = {};
+      const ghostCascades = [];
+      for (const leaf in paths) {
+        // Iterate over paths of leaf
+        const clustering = {};
+        for (const path of paths[leaf]) {
+          // Build the cascaded adjacency matrix across the path to this leaf
           const adj = {
             U: zeros(nodeCount, nodeCount),
             D: zeros(nodeCount, nodeCount),
@@ -1800,294 +1807,684 @@ export default defineComponent({
               adj[dir] = bitOr(adj[dir], adjmeta[node.name][dir]);
             }
           }
+          // console.log("!!!", leaf, path, adj);
 
+          // Determine the key, using row/cols of cascaded adj of leaf
           const cascadeKeyArr = [];
           for (const dir in adj) {
             cascadeKeyArr.push(
-              adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
+              adj[dir].subset(index(parseInt(leaf), range(0, nodeCount)))
             );
             cascadeKeyArr.push(
-              adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
+              adj[dir].subset(index(range(0, nodeCount), parseInt(leaf)))
             );
           }
-
           const cascadeKey = format(cascadeKeyArr);
-          if (Object.values(cascades).length === 0) {
-            firstKey = cascadeKey;
 
-            for (const dir in final_adjacencies) {
-              // Set adjacencies for the first one
-              console.log(
-                "Setting initial ADJ for",
-                dir,
-                key,
-                "H",
-                clone(
-                  adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
-                ),
-                "V",
-                clone(
-                  adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
-                )
-              );
-              final_adjacencies[dir].subset(
-                index([parseInt(key)], range(0, nodeCount)),
-                bitOr(
-                  final_adjacencies[dir].subset(
-                    index(parseInt(key), range(0, nodeCount))
-                  ),
-                  adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
-                )
-              );
-              final_adjacencies[dir].subset(
-                index(range(0, nodeCount), [parseInt(key)]),
-                bitOr(
-                  final_adjacencies[dir].subset(
-                    index(range(0, nodeCount), parseInt(key))
-                  ),
-                  adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
-                )
-              );
+          // Here we should just ignore this path and not add a key if the parent is in the ghost list
+          // Instead we should bitOr the adjacencies with the first non-ghost ancestor
+          if (path.length > 1) {
+            const parentName = path[path.length - 2].name;
+            const inputNodeName = path[path.length - 1].name;
+            const inputNode = nodes[inputNodeName];
+            // console.log(
+            //   "TEST",
+            //   treeNodeArray[leaf].name,
+            //   parentName,
+            //   nodes[treeNodeArray[leaf].name].ghostparents
+            // );
+            if (parentName in nodes[treeNodeArray[leaf].name].ghostparents) {
+              // This is where we do something useful
+
+              // Iterate through path:
+              for (let i = path.length - 2; i > 1; i--) {
+                // const currentInputNodeName = path[i].name;
+                // const currenInputNode = nodes[currenInputNodeName];
+                const inputAncestorName = path[i].name;
+                const inputAncestor = nodes[inputAncestorName];
+                console.log(inputNode, inputAncestorName);
+                if (
+                  !(inputAncestorName in inputNode.ghostparents) &&
+                  inputNodeName in inputAncestor.children
+                ) {
+                  console.log("VIABLE NON GHOST", inputNodeName, path[i]);
+                  console.log(
+                    "BECAUSE",
+                    inputAncestorName,
+                    "is not in",
+                    inputNode.ghostparents,
+                    "and",
+                    inputNodeName,
+                    "is a child of ",
+                    inputAncestor
+                  );
+
+                  // Actually yeah.. What now?
+                  // - We found the specific meta-tile that contains a non-ghost version of this tile (which is a leaf)
+                  // - The adjacencies of that cascade need to be OR'd. So we need to find the cluster (that may not exist yet) that contains... What? We have NO way of identifying the proper cascade.
+                  // - We know for sure that it exists though, or that it will exist. Perhaps this needs to be done in a second pass
+                  // - How would it work in that case?
+                  //   - We would need to separate the paths that lead ghosts
+                  //   - Iterating over those, we just know the "wrong" path basically, but we also know where to find the right paths, because they are ... So we find the path that ends in the non-ghost parent, and bitOr to that cascade
+                  //   - The above requires iterating through all the cascades of a leaf, which is fine...
+                  //   - What if multiple cascades exist for the same parent? That is tricky... need to think about this
+                  //      - We do have a full path though... Just attach the remainder for the path to it to uniquely identify this?
+                  //      - What else do we need? the adj, and leaf number
+
+                  // console.log("VIABLE PATH:", );
+
+                  ghostCascades.push([
+                    [...path.slice(0, i + 1), path[path.length - 1]],
+                    clone(adj),
+                    parseInt(leaf),
+                  ]);
+                }
+              }
+
+              continue;
             }
           }
-          if (!(cascadeKey in cascades)) {
-            cascades[cascadeKey] = [];
+
+          // If this key is new, make a list, otherwise append it to the cluster
+          if (!(cascadeKey in clustering)) {
+            clustering[cascadeKey] = { cascade: clone(adj), paths: [] };
           }
-          // PATH, ADJ, NODE
-          cascades[cascadeKey].push([path, clone(adj), path[path.length - 1]]);
-          console.log("CASC", key, clone(adj));
+          clustering[cascadeKey].paths.push(path);
         }
-
-        console.log("ADJ AFTER INITIAL CASC", final_adjacencies);
-
-        let indexCounter = nodeCount + Object.values(splits).length;
-        console.log("COUNTER", indexCounter);
-        for (const c in cascades) {
-          // console.log("ITERATING CASCADE", c, cascades[c]);
-          if (c !== firstKey) {
-            // console.log("VALID CASCADE");
-            const paths = cascades[c].map((entry) => entry[0]);
-            const cascade = cascades[c][0][1];
-            const node = cascades[c][0][2];
-            splits[indexCounter] = [paths, cascade, node];
-            indexCounter++;
-          }
-        }
-
-        // console.log("SPLITS:", splits);
-        // Now iterate through the cascades and find inequalities --> split these off
-        // TODO: Finish this clustering technique...
-        // const bins = {};
-        // for (const c in cascades) {
-        //   const cascadeKey = cascades[c][2];
-        //   bins[cascadeKey] = [];
-        // }
-
-        // console.log("BIN", bins);
-
-        // for (const c1 in cascades) {
-        //   console.log(cascades[c1]);
-        //   const cascade1 = cascades[c1][1];
-        //   const c1path = cascades[c1][0];
-        //   const leafIndex = c1path[c1path.length - 1].key;
-        //   outer: for (const b in bins) {
-        //     const bin = bins[b];
-        //     for (const [c2path, cascade2] of bin) {
-        //       for (const dir in cascade1) {
-        //         if (
-        //           sum(
-        //             bitXor(
-        //               cascade1[dir].subset(
-        //                 index(leafIndex, range(0, nodeCount))
-        //               ),
-        //               cascade2[dir].subset(
-        //                 index(leafIndex, range(0, nodeCount))
-        //               )
-        //             )
-        //           ) > 0
-        //         ) {
-        //           // splits[c2] = [c2path, cascade2];
-        //           for (const c of bins[c1]) {
-        //             bin.push(c);
-        //           }
-        //           bins[c1] = [];
-        //           break outer;
-        //         }
-        //       }
-        //     }
-        //   }
-        // }
-
-        // console.log(bins);
-
-        // for (const c1 in cascades) {
-        //   for (const c2 in cascades) {
-        //     const cascade1 = cascades[c1][1];
-        //     const cascade2 = cascades[c2][1];
-        //     const c2path = cascades[c2][0];
-        //     const leafIndex = c2path[c2path.length - 1].key;
-
-        //     // TODO: Should probably reconsider this approach, the aim is to reduce
-        //     // Or even better --> we should cluster
-        //     // Bin accumulation:
-        //     // - Compare cascade to all the "binned" cascades
-        //     // - If cascade is not similar to any of them, add a new "bin"
-        //     // - Otherwise, attribute the cascade to that bin
-        //     // - Create new split for every bin
-
-        //     if (c1 != c2 && !(c1 in splits) && !(c2 in splits)) {
-        //       for (const dir in cascade1) {
-        //         if (
-        //           sum(
-        //             bitXor(
-        //               cascade1[dir].subset(
-        //                 index(leafIndex, range(0, nodeCount))
-        //               ),
-        //               cascade2[dir].subset(
-        //                 index(leafIndex, range(0, nodeCount))
-        //               )
-        //             )
-        //           ) > 0
-        //         ) {
-        //           splits[c2] = [c2path, cascade2];
-        //           break;
-        //         }
-        //       }
-        //     }
-        //   }
-        // cascades[path];
+        clusters[leaf] = clustering;
       }
-      console.log("ADJ SO FAR:", structuredClone(final_adjacencies));
-      // Object.values(final_adjacencies).forEach((e) => {
-      //   console.log(format(e));
-      // });
+      console.log("FULL CL", clusters);
 
-      // const compressed_adjacencies = {
-      //   U: Object.values(adjmeta)
-      //     .map((adj) => adj.U)
-      //     .reduce((acc, c) => bitOr(acc, c)),
-      //   D: Object.values(adjmeta)
-      //     .map((adj) => adj.D)
-      //     .reduce((acc, c) => bitOr(acc, c)),
-      //   R: Object.values(adjmeta)
-      //     .map((adj) => adj.R)
-      //     .reduce((acc, c) => bitOr(acc, c)),
-      //   L: Object.values(adjmeta)
-      //     .map((adj) => adj.L)
-      //     .reduce((acc, c) => bitOr(acc, c)),
-      // };
+      // Apply the ghost cascades
+      console.log("ghosts", ghostCascades);
+      for (const [path, cascade, leaf] of ghostCascades) {
+        for (const clusterKey in clusters[leaf]) {
+          const cluster = clusters[leaf][clusterKey];
+          for (const clusterPath of cluster.paths) {
+            // console.log("huh", clusterPath, path, leaf);
+            if (clusterPath.length === path.length) {
+              let equivalent = true;
+              for (let i = 0; i < clusterPath.length; i++) {
+                if (clusterPath.name != path.name) {
+                  equivalent = false;
+                }
+              }
+              if (equivalent) {
+                // Apply information in the cascade ( ONLY TO THE LEAF)
+                console.log("Applying ghost cascade:", path);
 
-      // Now that we have all the potential splits, we need to check each one, and create a new tile.
-      // There is a dumb way to do this, and a smart one.
-      // The dumb but neat way is to add the nodes to the tiles/node arrays, which will break everything unless I split off the ones intended for the input and copy over
-      // The smart and lazy way is to specify some kind of overrides map (is it smart though..?)
+                for (const dir in cluster.cascade) {
+                  cluster.cascade[dir].subset(
+                    index(leaf, range(0, nodeCount)),
+                    cascade[dir].subset(index(leaf, range(0, nodeCount)))
+                  );
+                  cluster.cascade[dir].subset(
+                    index(range(0, nodeCount), leaf),
+                    cascade[dir].subset(index(range(0, nodeCount), leaf))
+                  );
 
-      const splitCount = Object.values(splits).length;
-      for (const dir in final_adjacencies) {
-        final_adjacencies[dir].resize([
-          nodeCount + splitCount,
-          nodeCount + splitCount,
-        ]);
-      }
-
-      const overrides = {};
-      for (const splitKey in splits) {
-        const [_, __, node] = splits[splitKey];
-        overrides[splitKey] = node.key;
-      }
-
-      for (const splitKey in splits) {
-        const splitKeyNum = parseInt(splitKey);
-        const [paths, cascade, node] = splits[splitKey];
-
-        console.log("SPLIT", paths, cascade, node);
-        const oldChild = node;
-        const newName = `${oldChild.name}-${splitKey}`; // Should basically remain the same
-        const newChild = {
-          paintable: true,
-          generate: true,
-          meta: oldChild.meta,
-          color: [
-            // Color is deprecated
-            0, 0, 0, 255,
-          ],
-          children: {},
-          adjacencies: {
-            // Unused, only used in the input
-            // TODO: See if we can ditch it
-            U: [],
-            D: [],
-            L: [],
-            R: [],
-          },
-        };
-        nodes[newName] = newChild;
-
-        for (const path of paths) {
-          if (path.length > 1) {
-            const oldParent = path[path.length - 2];
-            this.edgeOverrides[
-              `${oldParent.key}|${oldChild.key}`
-            ] = `${oldParent.key}|${splitKey}`;
-            nodes[oldParent.name].children[newName] =
-              nodes[oldParent.name].children[oldChild.name];
-            delete nodes[oldParent.name].children[oldChild.name];
-            // this.probDict[`${oldParent.key}|${splitKey}`] = 1;
+                  // cluster.cascade[dir] = bitOr(cluster.cascade[dir], );
+                }
+              }
+            }
           }
         }
-        console.log("OVERRIDES:", overrides);
-        console.log(splitCount);
-        for (const dir in final_adjacencies) {
-          const indices = range(0, nodeCount);
+      }
 
-          // Swap original index with split index
-          indices.set([oldChild.key], splitKeyNum);
+      const ORIGINAL_NODES = range(0, nodeCount);
+      const moveTargets = {};
+      const ghosts = [];
+      for (const leaf in clusters) {
+        const leafNum = parseInt(leaf);
+        if (Object.values(clusters[leaf]).length > 1) {
+          // SPLIT
+          // - Create new nodes for both variants
+          // - Add as children to original
+          // - Make original meta
+          // - Deal with adjacencies between the splits somehow
+          // - Then mark the appropriate ghosts
 
-          // We're skipping split<->original and original<->split
-          //
-          final_adjacencies[dir].subset(
-            index([splitKeyNum], indices),
-            cascade[dir].subset(index([oldChild.key], range(0, nodeCount)))
-          );
-          final_adjacencies[dir].subset(
-            index(indices, [splitKeyNum]),
-            cascade[dir].subset(index(range(0, nodeCount), [oldChild.key]))
-          );
+          // NOTE: This interferes with what happens below, if the node is under root... Deal with it somehow
+          const originalName = treeNodeArray[leafNum].name;
+          const originalNode = nodes[originalName]; // Kinda crappy that there is no easier way to obtain the name
+          // console.log("OG", originalName, nodes["root"]);
+          // console.log("N", structuredClone(nodes));
+          // Make new node for each cluster
+          for (const key in clusters[leaf]) {
+            const cluster = clusters[leaf][key];
+            // console.log("Cluster", cluster);
+            const newIndex = Object.values(nodes).length;
+            const newName = `${originalName}-${newIndex}`; // Should basically remain the same
+            const newChild = {
+              paintable: true,
+              generate: true,
+              meta: originalNode.meta,
+              color: [
+                // Color is deprecated
+                0, 0, 0, 255,
+              ],
+              children: {},
+            };
+            invertedIndex[newName] = newIndex;
+            nodes[newName] = newChild;
+            overrides[newIndex] = leafNum;
+            originalNode.children[newName] = 1;
 
-          // How can this possibly break... It somehow forgets about
-          for (let i = nodeCount; i < nodeCount + splitCount; i++) {
-            console.log(
-              "SET:",
-              `[${splitKeyNum},${i}] to value at [${oldChild.key},${
-                overrides[i]
-              }] which is ${cascade[dir].get([oldChild.key, overrides[i]])}`
-            );
+            for (const path of cluster.paths) {
+              // console.log("what", path, path.length);
+              if (path.length > 1) {
+                // console.log("???", path);
 
-            final_adjacencies[dir].set(
-              [splitKeyNum, i],
-              cascade[dir].get([oldChild.key, overrides[i]])
-            );
-            final_adjacencies[dir].set(
-              [i, splitKeyNum],
-              cascade[dir].get([overrides[i], oldChild.key])
-            );
+                const parent = path[path.length - 2];
+                nodes[parent.name].children[newName] =
+                  nodes[parent.name].children[originalName];
+                delete nodes[parent.name].children[originalName];
+                // console.log("MODDED", nodes[parent.name]);
+
+                // Mark ghost
+                if (parent.name in originalNode.ghostparents) {
+                  ghosts.push([
+                    nodes[parent.name],
+                    parent,
+                    newName,
+                    originalName,
+                  ]);
+                }
+              }
+            }
+            nodes["root"].children[originalName] = 0; // Just so we can use the meta-tile
+
+            // Resize matrix and fill in the new adjacency data
+            for (const dir in final_adjacencies) {
+              const indices = range(0, nodeCount);
+
+              // Swap original index with split index
+              indices.set([leafNum], newIndex);
+
+              final_adjacencies[dir].resize([newIndex + 1, newIndex + 1]);
+
+              // The new node will have information from the cascade at the new location in the matrix
+              final_adjacencies[dir].subset(
+                index(newIndex, indices),
+                cluster.cascade[dir].subset(index(leafNum, ORIGINAL_NODES))
+              );
+
+              // Does this even make sense?
+              const rawAdj = squeeze(
+                cluster.cascade[dir].subset(index(leafNum, ORIGINAL_NODES))
+              )._data;
+              // console.log("RAW ADJ", leafNum, rawAdj);
+              for (let i = 0; i < rawAdj.length; i++) {
+                const constraint = rawAdj[i];
+                // console.log("ITERATING", i, constraint);
+
+                if (constraint) {
+                  // console.log("- HIT", i);
+                  if (!(i in moveTargets)) {
+                    moveTargets[i] = [];
+                  }
+                  moveTargets[i].push({ from: leafNum, to: newIndex });
+                }
+              }
+
+              final_adjacencies[dir].subset(
+                index(indices, newIndex),
+                cluster.cascade[dir].subset(index(ORIGINAL_NODES, leafNum))
+              );
+
+              for (let i = nodeCount; i < Object.values(nodes).length; i++) {
+                final_adjacencies[dir].set(
+                  [newIndex, i],
+                  cluster.cascade[dir].get([leafNum, overrides[i]])
+                );
+                final_adjacencies[dir].set(
+                  [i, newIndex],
+                  cluster.cascade[dir].get([overrides[i], leafNum])
+                );
+              }
+            }
           }
 
-          // Asymmetrical adjacencies in order to deal with meta-tile interface
-          // This is where we deal with split<->original and original<->split
-          // This does create illegal tile configurations, but we are okay with these
-          final_adjacencies[dir].set(
-            [splitKeyNum, oldChild.key],
-            final_adjacencies[dir].get([splitKeyNum, splitKeyNum])
-          );
-          final_adjacencies[dir].set(
-            [oldChild.key, splitKeyNum],
-            final_adjacencies[dir].get([oldChild.key, oldChild.key])
-          );
-        }
+          originalNode.meta = true;
 
-        invertedIndex[newName] = splitKeyNum;
+          // console.log(originalNode);
+        }
       }
+      for (const leaf in clusters) {
+        const leafNum = parseInt(leaf);
+
+        if (Object.values(clusters[leaf]).length === 1) {
+          // NO SPLIT - using for loop just for convenience, even though it is one entry
+          for (const key in clusters[leaf]) {
+            const cluster = clusters[leaf][key];
+
+            for (const path of cluster.paths) {
+              if (path.length > 1) {
+                const parent = path[path.length - 2];
+                const name = treeNodeArray[leafNum].name;
+                const node = nodes[name]; // Kinda crappy that there is no easier way to obtain the name
+
+                // Mark ghost
+                if (parent.name in node.ghostparents) {
+                  ghosts.push([nodes[parent.name], parent, name, name]);
+                }
+              }
+            }
+
+            for (const dir in final_adjacencies) {
+              final_adjacencies[dir].subset(
+                index(leafNum, ORIGINAL_NODES),
+                cluster.cascade[dir].subset(index(leafNum, ORIGINAL_NODES))
+              );
+              final_adjacencies[dir].subset(
+                index(ORIGINAL_NODES, leafNum),
+                cluster.cascade[dir].subset(index(ORIGINAL_NODES, leafNum))
+              );
+
+              if (leafNum in moveTargets) {
+                // console.log("works????");
+                for (const moveTarget of moveTargets[leafNum]) {
+                  // console.log("BEF", leafNum, clone(final_adjacencies[dir]));
+                  // console.log(
+                  //   "SETTING",
+                  //   index(leafNum, [moveTarget.from, moveTarget.to]),
+                  //   "to",
+                  //   [(0, 1)]
+                  // );
+                  // final_adjacencies[dir].subset(
+                  //   index(leafNum, [moveTarget.from, moveTarget.to]),
+                  //   [0, 1]
+                  // );
+                  // final_adjacencies[dir].set([leafNum, moveTarget.from], 0);
+                  // final_adjacencies[opposingDir[dir]].set(
+                  //   [moveTarget.from, leafNum],
+                  //   0
+                  // );
+                  // final_adjacencies[dir].set([leafNum, moveTarget.to], 1); // TODO: Causes contradictions
+                  // final_adjacencies[opposingDir[dir]].set(
+                  //   [moveTarget.to, leafNum],
+                  //   1
+                  // );
+                  // console.log("AFT", leafNum, clone(final_adjacencies[dir]));
+                }
+              }
+            }
+          }
+        }
+      }
+
+      for (const [parent, treeParent, ghost, originalGhost] of ghosts) {
+        console.log("REMOVING GHOST", parent, ghost);
+        delete parent.children[ghost];
+        treeParent.children = treeParent.children.filter(
+          (c) => c.name !== originalGhost
+        );
+
+        console.log(treeParent);
+      }
+
+      console.log(nodes);
+
+      // Get rid of ghosts --- Should be adjusted to splits...
+      for (const node in nodes) {
+        for (const parent in nodes[node].ghostparents) {
+          console.log("REMOVING GHOST: ", node, "from", parent);
+          for (const key in nodes[parent].children) {
+            const name = key.split("-")[0];
+            if (name === node && nodes[parent].children[name] > 0) {
+              console.log("Removing ghost", key, "from", nodes[parent]);
+              delete nodes[parent].children[key];
+            }
+          }
+        }
+      }
+
+      console.log("MOVES", moveTargets);
+      console.log("FINAL NODES", nodes);
+      console.log("FINAL ADJ", final_adjacencies);
+
+      // // Set self-adj for all tiles that are meta, since we don't cover those later
+      // for (const node of this.nodeArray) {
+      //   if (node.meta) {
+      //     for (const dir in final_adjacencies) {
+      //       console.log(
+      //         "NM",
+      //         dir,
+      //         node.name,
+      //         adjmeta[node.name][dir].get([node.key, node.key])
+      //       );
+      //       final_adjacencies[dir].set(
+      //         [node.key, node.key],
+      //         adjmeta[node.name][dir].get([node.key, node.key])
+      //       );
+      //     }
+      //   }
+      // }
+
+      // const splits = {};
+      // for (const key in paths) {
+      //   const cascades = {};
+      //   let firstKey;
+      //   console.log("PATHS FOR", key, paths[key]);
+      //   for (const path of paths[key]) {
+      //     const pathKey = path.map((n) => n.key).join(".");
+      //     const adj = {
+      //       U: zeros(nodeCount, nodeCount),
+      //       D: zeros(nodeCount, nodeCount),
+      //       L: zeros(nodeCount, nodeCount),
+      //       R: zeros(nodeCount, nodeCount),
+      //     };
+      //     for (const node of path) {
+      //       for (const dir in adj) {
+      //         adj[dir] = bitOr(adj[dir], adjmeta[node.name][dir]);
+      //       }
+      //     }
+
+      //     const cascadeKeyArr = [];
+      //     for (const dir in adj) {
+      //       cascadeKeyArr.push(
+      //         adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
+      //       );
+      //       cascadeKeyArr.push(
+      //         adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
+      //       );
+      //     }
+      //     console.log("HANDLING PATH", path, "WITH CASCADE", adj);
+
+      //     const cascadeKey = format(cascadeKeyArr);
+      //     if (Object.values(cascades).length === 0) {
+      //       firstKey = cascadeKey;
+
+      //       for (const dir in final_adjacencies) {
+      //         // Set adjacencies for the first one
+
+      //         // BitOr probably
+      //         console.log(
+      //           "Setting initial ADJ for",
+      //           dir,
+      //           key,
+      //           "H",
+      //           clone(
+      //             adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
+      //           ),
+      //           "V",
+      //           clone(
+      //             adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
+      //           )
+      //         );
+      //         final_adjacencies[dir].subset(
+      //           index(parseInt(key), range(0, nodeCount)),
+      //           adj[dir].subset(index(parseInt(key), range(0, nodeCount)))
+      //           // bitOr(
+      //           //   final_adjacencies[dir].subset(
+      //           //     index(parseInt(key), range(0, nodeCount))
+      //           //   ),
+
+      //           // )
+      //         );
+      //         console.log("CHECK", clone(adj));
+      //         console.log(
+      //           "FINAL ADJ FOR 12 IS",
+      //           final_adjacencies[dir].subset(index(12, range(0, nodeCount)))
+      //         );
+      //         // final_adjacencies[dir].subset(
+      //         //   index(range(0, nodeCount), [parseInt(key)]),
+      //         //   adj[dir].subset(index(range(0, nodeCount), parseInt(key)))
+
+      //         //   // bitOr(
+      //         //   //   final_adjacencies[dir].subset(
+      //         //   //     index(range(0, nodeCount), parseInt(key))
+      //         //   //   ),
+      //         //   // )
+      //         // );
+      //       }
+      //     }
+      //     if (!(cascadeKey in cascades)) {
+      //       cascades[cascadeKey] = [];
+      //     }
+      //     // PATH, ADJ, NODE
+      //     cascades[cascadeKey].push([path, clone(adj), path[path.length - 1]]);
+      //     console.log("CASC", key, clone(adj));
+      //   }
+
+      //   // console.log("ADJ AFTER INITIAL CASC", final_adjacencies);
+      //   console.log("COLLECTED CASCADES FOR", key, cascades);
+
+      //   let indexCounter = nodeCount + Object.values(splits).length;
+      //   console.log("COUNTER", indexCounter);
+      //   for (const c in cascades) {
+      //     // console.log("ITERATING CASCADE", c, cascades[c]);
+      //     if (c !== firstKey) {
+      //       // console.log("VALID CASCADE");
+      //       const paths = cascades[c].map((entry) => entry[0]);
+      //       const cascade = cascades[c][0][1];
+      //       const node = cascades[c][0][2];
+      //       splits[indexCounter] = [paths, cascade, node];
+      //       indexCounter++;
+      //     }
+      //   }
+      // }
+      // console.log("ADJ SO FAR:", structuredClone(final_adjacencies));
+      // // Object.values(final_adjacencies).forEach((e) => {
+      // //   console.log(format(e));
+      // // });
+
+      // // const compressed_adjacencies = {
+      // //   U: Object.values(adjmeta)
+      // //     .map((adj) => adj.U)
+      // //     .reduce((acc, c) => bitOr(acc, c)),
+      // //   D: Object.values(adjmeta)
+      // //     .map((adj) => adj.D)
+      // //     .reduce((acc, c) => bitOr(acc, c)),
+      // //   R: Object.values(adjmeta)
+      // //     .map((adj) => adj.R)
+      // //     .reduce((acc, c) => bitOr(acc, c)),
+      // //   L: Object.values(adjmeta)
+      // //     .map((adj) => adj.L)
+      // //     .reduce((acc, c) => bitOr(acc, c)),
+      // // };
+
+      // // Now that we have all the potential splits, we need to check each one, and create a new tile.
+      // // There is a dumb way to do this, and a smart one.
+      // // The dumb but neat way is to add the nodes to the tiles/node arrays, which will break everything unless I split off the ones intended for the input and copy over
+      // // The smart and lazy way is to specify some kind of overrides map (is it smart though..?)
+
+      // const splitCount = Object.values(splits).length;
+      // for (const dir in final_adjacencies) {
+      //   final_adjacencies[dir].resize([
+      //     nodeCount + splitCount,
+      //     nodeCount + splitCount,
+      //   ]);
+      // }
+
+      // const overrides = {};
+      // for (const splitKey in splits) {
+      //   const [_, __, node] = splits[splitKey];
+      //   overrides[splitKey] = node.key;
+      // }
+
+      // // Something here is order-dependent.... Need to figure out what.
+      // // What I DO know:
+      // // - one of the "tree" tiles is a ghost --> means that it would not receive its own split
+      // // - in the malformed generation, tree is missing the split grass tile, and the split grass tile is missing tree
+
+      // // FOUND IT: Sometimes, a different group of paths is treated first.
+      // // This is fine, but doing so should not influence the final output
+      // // So how is it possible that this happens?
+      // for (const splitKey in splits) {
+      //   const splitKeyNum = parseInt(splitKey);
+      //   const [paths, cascade, node] = splits[splitKey];
+
+      //   if (node.key === 12) {
+      //     console.log("=======GRASS SPLIT=========");
+      //   }
+
+      //   console.log("SPLIT", paths, cascade, node);
+      //   const oldChild = node;
+      //   const newName = `${oldChild.name}-${splitKey}`; // Should basically remain the same
+      //   const newChild = {
+      //     paintable: true,
+      //     generate: true,
+      //     meta: oldChild.meta,
+      //     color: [
+      //       // Color is deprecated
+      //       0, 0, 0, 255,
+      //     ],
+      //     children: {},
+      //     adjacencies: {
+      //       // Unused, only used in the input
+      //       // TODO: See if we can ditch it
+      //       U: [],
+      //       D: [],
+      //       L: [],
+      //       R: [],
+      //     },
+      //   };
+      //   nodes[newName] = newChild;
+
+      //   if (node.key === 12) {
+      //     console.log("- Path modifications");
+      //   }
+      //   for (const path of paths) {
+      //     if (path.length > 1) {
+      //       const oldParent = path[path.length - 2];
+      //       this.edgeOverrides[
+      //         `${oldParent.key}|${oldChild.key}`
+      //       ] = `${oldParent.key}|${splitKey}`;
+      //       nodes[oldParent.name].children[newName] =
+      //         nodes[oldParent.name].children[oldChild.name];
+      //       delete nodes[oldParent.name].children[oldChild.name];
+      //       if (node.key === 12) {
+      //         console.log(
+      //           "- | Added edge override",
+      //           `${oldParent.key}|${oldChild.key} --> ${oldParent.key}|${splitKey}`
+      //         );
+      //         console.log(
+      //           "- | Modified child name in parent and removed old child",
+      //           nodes[oldParent.name].children
+      //         );
+      //       }
+      //       // this.probDict[`${oldParent.key}|${splitKey}`] = 1;
+      //     }
+      //   }
+
+      //   console.log("OVERRIDES:", overrides);
+      //   console.log(splitCount);
+      //   for (const dir in final_adjacencies) {
+      //     const indices = range(0, nodeCount);
+
+      //     // Swap original index with split index
+      //     indices.set([oldChild.key], splitKeyNum);
+      //     if (node.key === 12 && dir === "U") {
+      //       console.log(
+      //         "- Changed indices ",
+      //         indices,
+      //         "from",
+      //         squeeze(
+      //           final_adjacencies[dir].subset(index([splitKeyNum], indices))
+      //         ),
+      //         "to",
+      //         squeeze(
+      //           cascade[dir].subset(index([oldChild.key], range(0, nodeCount)))
+      //         )
+      //       );
+      //     }
+      //     if (node.key === 12 && dir === "U") {
+      //       console.log(
+      //         "- Changed indices ",
+      //         indices,
+      //         "from",
+      //         squeeze(
+      //           final_adjacencies[dir].subset(index(indices, [splitKeyNum]))
+      //         ),
+      //         "to",
+      //         squeeze(
+      //           cascade[dir].subset(index(range(0, nodeCount), [oldChild.key]))
+      //         )
+      //       );
+      //     }
+
+      //     // We're skipping split<->original and original<->split
+      //     //
+      //     final_adjacencies[dir].subset(
+      //       index([splitKeyNum], indices),
+      //       cascade[dir].subset(index([oldChild.key], range(0, nodeCount)))
+      //     );
+      //     final_adjacencies[dir].subset(
+      //       index(indices, [splitKeyNum]),
+      //       cascade[dir].subset(index(range(0, nodeCount), [oldChild.key]))
+      //     );
+
+      //     if (node.key === 12 && dir === "U") {
+      //       console.log(
+      //         "- Compare ORIGINAL:",
+      //         squeeze(
+      //           final_adjacencies[dir].subset(
+      //             index([oldChild.key], range(0, nodeCount + splitCount))
+      //           )
+      //         )
+      //       );
+      //       console.log(
+      //         "- Compare SPLIT:",
+      //         squeeze(
+      //           final_adjacencies[dir].subset(
+      //             index([splitKeyNum], range(0, nodeCount + splitCount))
+      //           )
+      //         )
+      //       );
+      //     }
+
+      //     // How can this possibly break... It somehow forgets about
+      //     for (let i = nodeCount; i < nodeCount + splitCount; i++) {
+      //       console.log(
+      //         "SET:",
+      //         `[${splitKeyNum},${i}] to value at [${oldChild.key},${
+      //           overrides[i]
+      //         }] which is ${cascade[dir].get([oldChild.key, overrides[i]])}`
+      //       );
+
+      //       final_adjacencies[dir].set(
+      //         [splitKeyNum, i],
+      //         cascade[dir].get([oldChild.key, overrides[i]])
+      //       );
+      //       final_adjacencies[dir].set(
+      //         [i, splitKeyNum],
+      //         cascade[dir].get([overrides[i], oldChild.key])
+      //       );
+      //     }
+
+      //     // Asymmetrical adjacencies in order to deal with meta-tile interface
+      //     // This is where we deal with split<->original and original<->split
+      //     // This does create illegal tile configurations, but we are okay with these
+
+      //     if (node.key === 12 && dir === "U") {
+      //       console.log(
+      //         "- Setting asym",
+      //         [splitKeyNum, oldChild.key],
+      //         "to",
+      //         final_adjacencies[dir].get([splitKeyNum, splitKeyNum])
+      //       );
+      //       console.log(
+      //         "- Setting asym",
+      //         [oldChild.key, splitKeyNum],
+      //         "to",
+      //         final_adjacencies[dir].get([oldChild.key, oldChild.key])
+      //       );
+      //     }
+
+      //     final_adjacencies[dir].set(
+      //       [splitKeyNum, oldChild.key],
+      //       final_adjacencies[dir].get([splitKeyNum, splitKeyNum])
+      //     );
+      //     final_adjacencies[dir].set(
+      //       [oldChild.key, splitKeyNum],
+      //       final_adjacencies[dir].get([oldChild.key, oldChild.key])
+      //     );
+      //   }
+
+      //   invertedIndex[newName] = splitKeyNum;
+      // }
+
       this.overrides = overrides;
 
       this.workerData.adjacencies = final_adjacencies;
@@ -2097,6 +2494,24 @@ export default defineComponent({
       this.workerData.invertedIndex = invertedIndex;
 
       this.nodesInput = treeNodeArray;
+
+      // Print all adjs by name:
+
+      for (const a in nodes) {
+        console.log("ADJs for ", a);
+        for (const dir in final_adjacencies) {
+          console.log(" :::", dir, ":::");
+
+          for (const b in nodes) {
+            if (
+              final_adjacencies[dir].get([invertedIndex[a], invertedIndex[b]])
+            ) {
+              console.log("   - ", b);
+            }
+          }
+        }
+      }
+
       // Build adjacency hashmap
       this.initWorker();
       nextTick(() => {
@@ -2239,6 +2654,12 @@ export default defineComponent({
 
             if (this.startingTile === tileId) {
               layer.ghost._data[i][j] = !this.startingGhost;
+            } else {
+              layer.ghost._data[i][j] = false;
+            }
+
+            if (this.nodeArray[tileId]?.meta) {
+              layer.ghost._data[i][j] = false;
             }
 
             layer.matrix._data[i][j] = tileId;
@@ -2467,6 +2888,7 @@ export default defineComponent({
         nodes[n.name] = {
           paintable: n.paintable,
           meta: n.meta,
+          ghostparents: {},
           color: JSON.parse(`[${n.color}]`),
           children: {},
           image: this.tiles[n.key].img,
@@ -2516,10 +2938,14 @@ export default defineComponent({
               }
 
               const node = nodes[metaName];
+              // Deal with ghosts later
+              if (ghost) {
+                nodes[name].ghostparents[metaName] = true;
+              }
+              if (!(name in node.children)) {
+                node.children[name] = 1;
+              }
               if (!ghost) {
-                if (!(name in node.children)) {
-                  node.children[name] = 0;
-                }
                 node.children[name] += 1;
               }
             }
