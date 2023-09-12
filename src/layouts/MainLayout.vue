@@ -1324,7 +1324,7 @@ export default defineComponent({
       );
 
       const edgeoverride = this.edgeOverrides[this.selectedNode];
-      console.log("HUH", edgeoverride, this.edgeOverrides);
+      // console.log("HUH", edgeoverride, this.edgeOverrides);
 
       this.worker.postMessage({
         question: "prob mod",
@@ -1335,11 +1335,6 @@ export default defineComponent({
       });
     },
     initWorker() {
-      for (const interval of this.intervals) {
-        window.clearInterval(interval);
-      }
-      this.intervals = [];
-
       this.worker.postMessage({
         question: "init",
         value: [
@@ -1589,8 +1584,6 @@ export default defineComponent({
       //   toRaw(this.importedTilesets)["../assets/data/1_dev_tileset.json"]
       // );
 
-      this.tilesetData = json;
-
       const nodes = json.nodes;
       const nodeCount = Object.keys(nodes).length;
 
@@ -1702,15 +1695,13 @@ export default defineComponent({
         }
       }
 
-      this.tileTree = [root];
-      this.nodeArray = treeNodeArray;
       // A little necessary evil
-      this.nodeArray.forEach((n) => {
+      treeNodeArray.forEach((n) => {
         n.value = `|${n.key}`;
       });
 
-      this.expanded.push(this.tileTree[0].value);
-      this.tileTree[0].children.forEach((c) => {
+      this.expanded.push(root.value);
+      root.children.forEach((c) => {
         this.expanded.push(c.value);
       });
 
@@ -1736,12 +1727,12 @@ export default defineComponent({
         // };
 
         const node = nodes[name];
-        console.log("ADJACENCIES FOR:", name);
+        // console.log("ADJACENCIES FOR:", name);
         for (const dir in node.adjacencies) {
-          console.log("  DIR:", dir);
+          // console.log("  DIR:", dir);
 
           for (const adj of node.adjacencies[dir]) {
-            console.log("     - ", adj);
+            // console.log("     - ", adj);
 
             const pair = adj.split(">-<");
             const index1 = invertedIndex[pair[0]];
@@ -2494,6 +2485,10 @@ export default defineComponent({
 
       //   invertedIndex[newName] = splitKeyNum;
       // }
+      this.tilesetData = json;
+
+      this.tileTree = [root];
+      this.nodeArray = treeNodeArray;
 
       this.overrides = overrides;
 
@@ -2507,24 +2502,25 @@ export default defineComponent({
 
       // Print all adjs by name:
 
-      for (const a in nodes) {
-        console.log("ADJs for ", a);
-        for (const dir in final_adjacencies) {
-          console.log(" :::", dir, ":::");
+      // for (const a in nodes) {
+      //   console.log("ADJs for ", a);
+      //   for (const dir in final_adjacencies) {
+      //     console.log(" :::", dir, ":::");
 
-          for (const b in nodes) {
-            if (
-              final_adjacencies[dir].get([invertedIndex[a], invertedIndex[b]])
-            ) {
-              console.log("   - ", b);
-            }
-          }
-        }
-      }
+      //     for (const b in nodes) {
+      //       if (
+      //         final_adjacencies[dir].get([invertedIndex[a], invertedIndex[b]])
+      //       ) {
+      //         console.log("   - ", b);
+      //       }
+      //     }
+      //   }
+      // }
 
       // Build adjacency hashmap
       this.initWorker();
       nextTick(() => {
+
         this.$refs.inputTree.expandAll();
       });
       // console.log("tiles", this.tiles);
@@ -2878,7 +2874,7 @@ export default defineComponent({
       }
     },
     buildMetaTree() {
-      console.log("LAYERS", this.metaLayers, this.layers);
+      console.log("LAYERS", toRaw(this.metaLayers), toRaw(this.layers));
       // STEPS
       // 1.) Collect allocated tiles
       // 2.) Create list of nodes
@@ -2886,7 +2882,7 @@ export default defineComponent({
       // 4.) find adjacencies
 
       // Find allocated nodes WRONG
-      const treeNodes = this.nodeArray;
+      const treeNodes = toRaw(this.nodeArray);
 
       // List of nodes according to input format
       const nodes = {};
@@ -3052,11 +3048,19 @@ export default defineComponent({
       }
       if (message === "doneInit") {
         console.log("My body is ready");
+        // console.time("UPDT");
+        // 23 ms
         this.updateCanvas(
           this.width,
           this.height,
           setCartesian(range(0, this.width), range(0, this.height))._data
         );
+        // console.timeEnd("UPDT");
+        for (const interval of this.intervals) {
+          window.clearInterval(interval);
+        }
+        this.intervals = [];
+
         this.intervals.push(
           window.setInterval(() => {
             this.worker.postMessage({ question: "update" });
