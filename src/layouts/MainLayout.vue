@@ -595,28 +595,69 @@
           @update:expanded="resetFocus"
         >
           <template v-slot:default-header="prop">
-            <div
+            <q-item
+              dense
+              style="width: 100%; padding: 0px"
               class="row items-center"
               v-bind:class="{
                 selectedtree: prop.tree.selected === prop.node.value,
-                prb0: this.probDict[prop.node.value] === this.probMods[0].value,
-                prb1: this.probDict[prop.node.value] === this.probMods[1].value,
-                prb2: this.probDict[prop.node.value] === this.probMods[2].value,
-                prb3: this.probDict[prop.node.value] === this.probMods[3].value,
-                prb4: this.probDict[prop.node.value] === this.probMods[4].value,
+                // prb0: this.probDict[prop.node.value] === this.probMods[0].value,
+                // prb1: this.probDict[prop.node.value] === this.probMods[1].value,
+                // prb2: this.probDict[prop.node.value] === this.probMods[2].value,
+                // prb3: this.probDict[prop.node.value] === this.probMods[3].value,
+                // prb4: this.probDict[prop.node.value] === this.probMods[4].value,
               }"
             >
-              <q-img
-                style="margin-right: 8px"
-                class="unselectable"
-                width="24px"
-                height="24px"
-                :src="this.tiles[prop.node.key]?.img?.src"
-              />
-              <div class="text-weight-bold unselectable">
-                {{ prop.node.name }}
-              </div>
-            </div>
+              <q-item-section style="margin-right: -20px" avatar>
+                <q-img
+                  class="unselectable"
+                  width="24px"
+                  height="24px"
+                  :src="this.tiles[prop.node.key]?.img?.src"
+                />
+              </q-item-section>
+
+              <q-item-section>
+                <div class="text-weight-bold unselectable">
+                  {{ prop.node.name }}
+                </div></q-item-section
+              >
+
+              <q-item-section side>
+                <q-btn-toggle
+                  v-if="prop?.node?.value?.split('|')?.[0]"
+                  title="Modify
+              how often the selected tile in the hierarchy will be chosen"
+                  spread
+                  v-model="this.probDict[prop.node.value]"
+                  size="xs"
+                  style="margin-right: 0px"
+                  padding="8px"
+                  toggle-color="yellow-7"
+                  :options="this.probMods"
+                  @click="
+                    (e) => {
+                      resetFocus();
+                      e.stopPropagation();
+                    }
+                  "
+                  @update:model-value="
+                    () => {
+                      setProbMod(prop.node.value);
+                      resetFocus();
+                    }
+                  "
+                />
+                <div
+                  class="text-weight-bold unselectable"
+                  v-if="!prop?.node?.value?.split('|')?.[0]"
+                >
+                  Tile Probabilities
+                </div>
+              </q-item-section>
+
+              <q-item-section avatar dense> </q-item-section>
+            </q-item>
           </template>
         </q-tree>
       </div>
@@ -764,7 +805,7 @@
             />
           </q-item-section>
         </q-item>
-        <q-item>
+        <!-- <q-item>
           <q-item-section>
             <q-item-label class="q-py-sm">
               <b
@@ -790,7 +831,7 @@
               "
             />
           </q-item-section>
-        </q-item>
+        </q-item> -->
 
         <q-item>
           <q-item-label class="q-pt-md">
@@ -1213,12 +1254,12 @@ export default defineComponent({
       probDict: {},
       probMods: [
         {
-          icon: "img:density_least.svg",
+          // icon: "img:density_least.svg",
           color: "red-5",
           value: 0.05,
         },
         {
-          icon: "img:density_less.svg",
+          // icon: "img:density_less.svg",
           color: "red-3",
           value: 0.25,
         },
@@ -1228,12 +1269,12 @@ export default defineComponent({
           value: 1,
         },
         {
-          icon: "img:density_more.svg",
+          // icon: "img:density_more.svg",
           color: "blue-3",
           value: 5,
         },
         {
-          icon: "img:density_most.svg",
+          // icon: "img:density_most.svg",
           color: "blue-5",
           value: 25,
         },
@@ -1315,22 +1356,21 @@ export default defineComponent({
       const cc = c.split(",").map((x) => parseInt(x));
       return `#${rgbHex(...cc)}`;
     },
-    setProbMod() {
+    setProbMod(nodeToModify) {
       console.log(
         "SETTING PROB MOD",
-        this.selectedNode,
+        nodeToModify,
         "to",
-        this.probDict[this.selectedNode]
+        this.probDict[nodeToModify]
       );
 
-      const edgeoverride = this.edgeOverrides[this.selectedNode];
-      console.log("HUH", edgeoverride, this.edgeOverrides);
+      const edgeoverride = this.edgeOverrides[nodeToModify];
 
       this.worker.postMessage({
         question: "prob mod",
         value: [
-          !!edgeoverride ? edgeoverride : this.selectedNode,
-          this.probDict[this.selectedNode],
+          !!edgeoverride ? edgeoverride : nodeToModify,
+          this.probDict[nodeToModify],
         ],
       });
     },
