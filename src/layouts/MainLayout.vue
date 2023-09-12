@@ -1794,6 +1794,8 @@ export default defineComponent({
       // Iterate over leaves
       const clusters = {};
       const ghostCascades = [];
+      const ghosts = [];
+
       for (const leaf in paths) {
         // Iterate over paths of leaf
         const clustering = {};
@@ -1827,7 +1829,8 @@ export default defineComponent({
           // Here we should just ignore this path and not add a key if the parent is in the ghost list
           // Instead we should bitOr the adjacencies with the first non-ghost ancestor
           if (path.length > 1) {
-            const parentName = path[path.length - 2].name;
+            const parent = path[path.length - 2];
+            const parentName = parent.name;
             const inputNodeName = path[path.length - 1].name;
             const inputNode = nodes[inputNodeName];
             // console.log(
@@ -1846,6 +1849,7 @@ export default defineComponent({
                 const inputAncestorName = path[i].name;
                 const inputAncestor = nodes[inputAncestorName];
                 console.log(inputNode, inputAncestorName);
+
                 if (
                   !(inputAncestorName in inputNode.ghostparents) &&
                   inputNodeName in inputAncestor.children
@@ -1883,6 +1887,14 @@ export default defineComponent({
                   ]);
                 }
               }
+              // We should mark full ghosts to be removed from the meta-tree
+
+              ghosts.push([
+                nodes[parentName],
+                parent,
+                inputNodeName,
+                inputNodeName,
+              ]);
 
               continue;
             }
@@ -1890,6 +1902,7 @@ export default defineComponent({
 
           // If this key is new, make a list, otherwise append it to the cluster
           if (!(cascadeKey in clustering)) {
+            console.log("ADDING CASC", clone(adj), "WITH PATH", path);
             clustering[cascadeKey] = { cascade: clone(adj), paths: [] };
           }
           clustering[cascadeKey].paths.push(path);
@@ -1919,11 +1932,21 @@ export default defineComponent({
                 for (const dir in cluster.cascade) {
                   cluster.cascade[dir].subset(
                     index(leaf, range(0, nodeCount)),
-                    cascade[dir].subset(index(leaf, range(0, nodeCount)))
+                    bitOr(
+                      cluster.cascade[dir].subset(
+                        index(leaf, range(0, nodeCount))
+                      ),
+                      cascade[dir].subset(index(leaf, range(0, nodeCount)))
+                    )
                   );
                   cluster.cascade[dir].subset(
                     index(range(0, nodeCount), leaf),
-                    cascade[dir].subset(index(range(0, nodeCount), leaf))
+                    bitOr(
+                      cluster.cascade[dir].subset(
+                        index(range(0, nodeCount), leaf)
+                      ),
+                      cascade[dir].subset(index(range(0, nodeCount), leaf))
+                    )
                   );
 
                   // cluster.cascade[dir] = bitOr(cluster.cascade[dir], );
@@ -1935,8 +1958,7 @@ export default defineComponent({
       }
 
       const ORIGINAL_NODES = range(0, nodeCount);
-      const moveTargets = {};
-      const ghosts = [];
+      // const moveTargets = { U: {}, D: {}, L: {}, R: {} };
       for (const leaf in clusters) {
         const leafNum = parseInt(leaf);
         if (Object.values(clusters[leaf]).length > 1) {
@@ -1972,12 +1994,8 @@ export default defineComponent({
             nodes[newName] = newChild;
             overrides[newIndex] = leafNum;
             originalNode.children[newName] = 1;
-
             for (const path of cluster.paths) {
-              // console.log("what", path, path.length);
               if (path.length > 1) {
-                // console.log("???", path);
-
                 // NOTE: This can happen multiple times if there are multiple paths to the meta-tile, generating multiple leaf paths
                 // Should consider whether this matters; if we have a difference in meta-tile upstream in the path, causing the leaves to have different adjacencies, they will receive different splits
                 // It doesn't reall. In the same meta-tile, we will have the same distribution of (leaf) tiles.
@@ -1989,6 +2007,13 @@ export default defineComponent({
                 // console.log("MODDED", nodes[parent.name]);
 
                 // Mark ghost
+                // console.log("HOW DOES THIS NOT FIRE??");
+                // console.log(
+                //   "Checking potential ghost",
+                //   parent.name,
+                //   originalName,
+                //   structuredClone(originalNode.ghostparents)
+                // );
                 if (parent.name in originalNode.ghostparents) {
                   ghosts.push([
                     nodes[parent.name],
@@ -2016,23 +2041,23 @@ export default defineComponent({
                 cluster.cascade[dir].subset(index(leafNum, ORIGINAL_NODES))
               );
 
-              // Does this even make sense?
-              const rawAdj = squeeze(
-                cluster.cascade[dir].subset(index(leafNum, ORIGINAL_NODES))
-              )._data;
-              // console.log("RAW ADJ", leafNum, rawAdj);
-              for (let i = 0; i < rawAdj.length; i++) {
-                const constraint = rawAdj[i];
-                // console.log("ITERATING", i, constraint);
+              // // Does this even make sense?
+              // const rawAdj = squeeze(
+              //   cluster.cascade[dir].subset(index(leafNum, ORIGINAL_NODES))
+              // )._data;
+              // // console.log("RAW ADJ", leafNum, rawAdj);
+              // for (let i = 0; i < rawAdj.length; i++) {
+              //   const constraint = rawAdj[i];
+              //   // console.log("ITERATING", i, constraint);
 
-                if (constraint) {
-                  // console.log("- HIT", i);
-                  if (!(i in moveTargets)) {
-                    moveTargets[i] = [];
-                  }
-                  moveTargets[i].push({ from: leafNum, to: newIndex });
-                }
-              }
+              //   if (constraint) {
+              //     // console.log("- HIT", i);
+              //     if (!(i in moveTargets[dir])) {
+              //       moveTargets[dir][i] = [];
+              //     }
+              //     moveTargets[dir][i].push({ from: leafNum, to: newIndex });
+              //   }
+              // }
 
               final_adjacencies[dir].subset(
                 index(indices, newIndex),
@@ -2072,6 +2097,12 @@ export default defineComponent({
                 const node = nodes[name]; // Kinda crappy that there is no easier way to obtain the name
 
                 // Mark ghost
+                console.log(
+                  "Checking potential ghost",
+                  parent.name,
+                  name,
+                  structuredClone(node.ghostparents)
+                );
                 if (parent.name in node.ghostparents) {
                   ghosts.push([nodes[parent.name], parent, name, name]);
                 }
@@ -2088,65 +2119,84 @@ export default defineComponent({
                 cluster.cascade[dir].subset(index(ORIGINAL_NODES, leafNum))
               );
 
-              if (leafNum in moveTargets) {
-                // console.log("works????");
-                for (const moveTarget of moveTargets[leafNum]) {
-                  // console.log("BEF", leafNum, clone(final_adjacencies[dir]));
-                  // console.log(
-                  //   "SETTING",
-                  //   index(leafNum, [moveTarget.from, moveTarget.to]),
-                  //   "to",
-                  //   [(0, 1)]
-                  // );
-                  // final_adjacencies[dir].subset(
-                  //   index(leafNum, [moveTarget.from, moveTarget.to]),
-                  //   [0, 1]
-                  // );
-                  // final_adjacencies[dir].set([leafNum, moveTarget.from], 0);
-                  // final_adjacencies[opposingDir[dir]].set(
-                  //   [moveTarget.from, leafNum],
-                  //   0
-                  // );
-                  // final_adjacencies[dir].set([leafNum, moveTarget.to], 1); // TODO: Causes contradictions
-                  // final_adjacencies[opposingDir[dir]].set(
-                  //   [moveTarget.to, leafNum],
-                  //   1
-                  // );
-                  // console.log("AFT", leafNum, clone(final_adjacencies[dir]));
-                }
-              }
+              // // Need to either do this, or cast the metatile-leaf adjacencies downwards in HSWFC
+              // if (leafNum in moveTargets[dir]) {
+              //   // console.log("works????");
+              //   for (const moveTarget of moveTargets[dir][leafNum]) {
+              //     // final_adjacencies[dir].set([leafNum, moveTarget.to], 1);
+              //     // console.log("BEF", leafNum, clone(final_adjacencies[dir]));
+              //     // console.log(
+              //     //   "SETTING",
+              //     //   index(leafNum, [moveTarget.from, moveTarget.to]),
+              //     //   "to",
+              //     //   [(0, 1)]
+              //     // );
+              //     // final_adjacencies[dir].subset(
+              //     //   index(leafNum, [moveTarget.from, moveTarget.to]),
+              //     //   [0, 1]
+              //     // );
+              //     // final_adjacencies[dir].set([leafNum, moveTarget.from], 0);
+              //     // final_adjacencies[opposingDir[dir]].set(
+              //     //   [moveTarget.from, leafNum],
+              //     //   0
+              //     // );
+              //     // final_adjacencies[dir].set([leafNum, moveTarget.to], 1);
+              //     // final_adjacencies[opposingDir[dir]].set(
+              //     //   [moveTarget.to, leafNum],
+              //     //   1
+              //     // );
+              //     // console.log("AFT", leafNum, clone(final_adjacencies[dir]));
+              //   }
+              // }
             }
           }
         }
       }
 
+      // // Deal with move targets
+      // for (const dir in final_adjacencies) {
+      //   for (const idx in moveTargets[dir]) {
+      //     for (const moveTarget of moveTargets[dir][idx]) {
+      //       console.log(parseInt(idx), moveTarget);
+      //       final_adjacencies[dir].set([parseInt(idx), moveTarget.to], 1);
+      //     }
+      //   }
+      // }
+
+      // TODO: Figure out which of the two methods below are desirable
+
+      // This also gets rid of ghosts....
       for (const [parent, treeParent, ghost, originalGhost] of ghosts) {
-        console.log("REMOVING GHOST", parent, ghost);
         delete parent.children[ghost];
         treeParent.children = treeParent.children.filter(
           (c) => c.name !== originalGhost
         );
-
-        console.log(treeParent);
+        // console.log(treeParent);
       }
 
       console.log(nodes);
 
-      // Get rid of ghosts --- Should be adjusted to splits...
-      for (const node in nodes) {
-        for (const parent in nodes[node].ghostparents) {
-          console.log("REMOVING GHOST: ", node, "from", parent);
-          for (const key in nodes[parent].children) {
-            const name = key.split("-")[0];
-            if (name === node && nodes[parent].children[name] > 0) {
-              console.log("Removing ghost", key, "from", nodes[parent]);
-              delete nodes[parent].children[key];
-            }
-          }
-        }
-      }
+      // // Get rid of ghosts --- Should be adjusted to splits...
+      // // NOTE: The children don't get stored in the TreeNodeArray, so this is tricky to make work...
+      // for (const node in nodes) {
+      //   for (const parent in nodes[node].ghostparents) {
+      //     console.log("REMOVING GHOST: ", node, "from", parent);
+      //     for (const key in nodes[parent].children) {
+      //       const name = key.split("-")[0];
+      //       if (name === node && nodes[parent].children[name] > 0) {
+      //         console.log("Removing ghost", key, "from", nodes[parent]);
+      //         delete nodes[parent].children[key];
+      //         const treeParent = treeNodeArray[invertedIndex[parent]];
+      //         console.log(treeParent, root);
+      //         treeParent.children = treeParent.children.filter(
+      //           (c) => c.name !== node
+      //         );
+      //       }
+      //     }
+      //   }
+      // }
 
-      console.log("MOVES", moveTargets);
+      // console.log("MOVES", moveTargets);
       console.log("FINAL NODES", nodes);
       console.log("FINAL ADJ", final_adjacencies);
 
@@ -2574,6 +2624,7 @@ export default defineComponent({
       node.meta = meta;
       tile.meta = meta;
       tile.img.src = imgUrl;
+      this.buildMetaTree();
 
       this.updateCanvas(
         this.width,
@@ -2911,18 +2962,22 @@ export default defineComponent({
           },
         };
       });
+      for (const l of this.layers) {
+        const uniqueTiles = {};
+        for (let i = 0; i < this.inputWidth; i++) {
+          for (let j = 0; j < this.inputHeight; j++) {
+            // Assign children, probabilities and adjacencies
+            // let prevNode = nodes[index[0]];
 
-      for (let i = 0; i < this.inputWidth; i++) {
-        for (let j = 0; j < this.inputHeight; j++) {
-          // Assign children, probabilities and adjacencies
-          // let prevNode = nodes[index[0]];
-          for (const l of this.layers) {
             const metaName = index[l.id];
             const tileId = l.matrix._data[i][j];
             const ghost = l.ghost._data[i][j];
 
             if (tileId > 0) {
               const name = index[`${tileId}`];
+              if (ghost) {
+                uniqueTiles[name] = metaName;
+              }
               const neighbours = {
                 U: [l.matrix._data[i]?.[j - 1], l.ghost._data[i]?.[j - 1]],
                 D: [l.matrix._data[i]?.[j + 1], l.ghost._data[i]?.[j + 1]],
@@ -2949,9 +3004,11 @@ export default defineComponent({
               }
 
               const node = nodes[metaName];
-              // Deal with ghosts later
               if (ghost) {
-                nodes[name].ghostparents[metaName] = true;
+                if (!(metaName in nodes[name].ghostparents)) {
+                  nodes[name].ghostparents[metaName] = 1;
+                }
+                nodes[name].ghostparents[metaName] += 1;
               }
               if (!(name in node.children)) {
                 node.children[name] = 1;
@@ -2960,6 +3017,21 @@ export default defineComponent({
                 node.children[name] += 1;
               }
             }
+          }
+        }
+        for (const tileName in uniqueTiles) {
+          const tile = nodes[tileName];
+          const metaName = uniqueTiles[tileName];
+          const meta = nodes[metaName];
+          // Indicates that we only have a mix of ghosts and non-ghosts
+          if (meta.children[tileName] > 1) {
+            console.log(
+              "Deleting ",
+              metaName,
+              "from ghost parents of",
+              tileName
+            );
+            delete tile.ghostparents[metaName];
           }
         }
       }
