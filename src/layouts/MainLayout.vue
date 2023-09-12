@@ -2944,9 +2944,16 @@ export default defineComponent({
           this.nodeArray = obj.nodeArray;
           this.metaLayers = obj.metaLayers;
           for (const t of this.tiles) {
+
+
+
             const imageSource = this.nodeArray[t.value].icon.substring(4);
             t.img = new Image();
             t.img.src = imageSource;
+            if (t === 0) {
+              t.img.src = generateMetatileImage('0,0,0', this.tileDim);
+            }
+
           }
 
           nextTick(() => {
@@ -2963,6 +2970,7 @@ export default defineComponent({
               );
             }
           });
+
 
           this.buildMetaTree();
         },
