@@ -1785,6 +1785,8 @@ export default defineComponent({
         R: zeros(nodeCount, nodeCount),
       };
 
+      const nodesClone = structuredClone(nodes);
+
       ////////////////////////
       // CLUSTERING
       /////////////////
@@ -1976,9 +1978,13 @@ export default defineComponent({
               if (path.length > 1) {
                 // console.log("???", path);
 
+                // NOTE: This can happen multiple times if there are multiple paths to the meta-tile, generating multiple leaf paths
+                // Should consider whether this matters; if we have a difference in meta-tile upstream in the path, causing the leaves to have different adjacencies, they will receive different splits
+                // It doesn't reall. In the same meta-tile, we will have the same distribution of (leaf) tiles.
+                // At most, we should keep a clone of the original weights, so we can always retrieve them properly
                 const parent = path[path.length - 2];
                 nodes[parent.name].children[newName] =
-                  nodes[parent.name].children[originalName];
+                  nodesClone[parent.name].children[originalName];
                 delete nodes[parent.name].children[originalName];
                 // console.log("MODDED", nodes[parent.name]);
 
@@ -2520,7 +2526,6 @@ export default defineComponent({
       // Build adjacency hashmap
       this.initWorker();
       nextTick(() => {
-
         this.$refs.inputTree.expandAll();
       });
       // console.log("tiles", this.tiles);
