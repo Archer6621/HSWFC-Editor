@@ -1324,7 +1324,7 @@ export default defineComponent({
       );
 
       const edgeoverride = this.edgeOverrides[this.selectedNode];
-      // console.log("HUH", edgeoverride, this.edgeOverrides);
+      console.log("HUH", edgeoverride, this.edgeOverrides);
 
       this.worker.postMessage({
         question: "prob mod",
@@ -2004,6 +2004,11 @@ export default defineComponent({
                 nodes[parent.name].children[newName] =
                   nodesClone[parent.name].children[originalName];
                 delete nodes[parent.name].children[originalName];
+
+                this.edgeOverrides[
+                  `${parent.key}|${leafNum}`
+                ] = `${parent.key}|${newIndex}`;
+
                 // console.log("MODDED", nodes[parent.name]);
 
                 // Mark ghost
