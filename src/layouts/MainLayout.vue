@@ -172,7 +172,7 @@
 
                 var tileId = parseInt(this.selectedNodeInput.split('|')[1]);
                 if (this.nodesInput[tileId].meta) {
-                  this.setActiveLayer(tileId);
+                  this.setActiveLayer(this.nodesInput[tileId].name);
                 }
               }
             }
@@ -183,7 +183,7 @@
             <!-- <q-tooltip v-if="prop.node.value === '|0'"
               >The root tile overlays everything by default.</q-tooltip
             > -->
-            <div
+            <!-- <div
               class="row items-center"
               v-bind:class="{
                 selectedtree: prop.tree.selected === prop.node.value,
@@ -202,7 +202,134 @@
               <div class="text-weight-bold unselectable">
                 {{ prop.node.name }}
               </div>
-            </div>
+            </div> -->
+
+            <q-item
+              dense
+              style="width: 100%; padding: 0px"
+              class="row items-center"
+              v-bind:class="{
+                selectedtree: prop.tree.selected === prop.node.value,
+                selectedlayer: String(prop.node.name) === this.activeLayer,
+
+                // disabledroot: prop.node.value === '|0',
+              }"
+            >
+              <q-item-section style="margin-right: -20px" avatar>
+                <q-img
+                  class="unselectable"
+                  width="24px"
+                  height="24px"
+                  :src="this.tiles[prop.node.key]?.img?.src"
+                />
+              </q-item-section>
+
+              <q-item-section>
+                <div class="text-weight-bold unselectable">
+                  {{ prop.node.name }}
+                </div></q-item-section
+              >
+
+              <q-item-section side>
+                <span>
+                  <q-btn
+                    v-if="prop.node.meta"
+                    style="
+                      min-width: 0px;
+                      min-height: 0px;
+                      padding: 0;
+                      margin: 4px;
+                      width: 16px;
+                      height: 16px;
+                      color: black;
+                      background-color: white;
+                    "
+                    icon="content_copy"
+                    size="xs"
+                    title="Copy Metalayer contents"
+                    dense
+                    @click="
+                      (e) => {
+                        e.stopPropagation();
+                        this.copyBuffer.matrix = mathjsClone(
+                          this.metaLayers[prop.node.name].matrix
+                        );
+                        this.copyBuffer.ghost = mathjsClone(
+                          this.metaLayers[prop.node.name].ghost
+                        );
+                        print(this.copyBuffer);
+                      }
+                    "
+                  ></q-btn>
+                  <q-btn
+                    v-if="prop.node.meta"
+                    style="
+                      min-width: 0px;
+                      min-height: 0px;
+                      padding: 0;
+                      margin: 4px;
+                      width: 16px;
+                      height: 16px;
+                      color: black;
+                      background-color: white;
+                    "
+                    icon="content_paste"
+                    size="xs"
+                    title="Paste Metalayer contents"
+                    dense
+                    @click="
+                      (e) => {
+                        e.stopPropagation();
+                        print(this.metaLayers);
+                        print(prop.node);
+                        this.metaLayers[prop.node.name].matrix = mathjsClone(
+                          this.copyBuffer.matrix
+                        );
+                        this.metaLayers[prop.node.name].ghost = mathjsClone(
+                          this.copyBuffer.ghost
+                        );
+                        this.buildMetaTree();
+                        this.refreshLayerCanvas(
+                          this.metaLayers[prop.node.name]
+                        );
+                      }
+                    "
+                  ></q-btn>
+                </span>
+                <!-- <q-btn-toggle
+                  v-if="prop?.node?.value?.split('|')?.[0]"
+                  title="Modify
+              how often the selected tile in the hierarchy will be chosen"
+                  spread
+                  v-model="this.probDict[prop.node.value]"
+                  size="xs"
+                  style="margin-right: 0px"
+                  padding="8px"
+                  toggle-color="yellow-7"
+                  :options="this.probMods"
+                  @click="
+                    (e) => {
+                      resetFocus();
+                      e.stopPropagation();
+                    }
+                  "
+                  @update:model-value="
+                    () => {
+                      // setProbMod(prop.node.value);
+                      // resetFocus();
+                    }
+                  "
+                /> -->
+                <!-- <div
+                  class="text-weight-bold unselectable"
+                  v-if="!prop?.node?.value?.split('|')?.[0]"
+                >
+                  Tile Probabilities
+                </div> -->
+              </q-item-section>
+
+              <q-item-section avatar dense> </q-item-section>
+            </q-item>
           </template>
         </q-tree>
       </div>
@@ -241,7 +368,7 @@
               style="
                 position: absolute;
                 right: 0;
-                bottom: 0;
+                bottom: 10%;
                 min-width: 0px;
                 min-height: 0px;
                 padding: 0;
@@ -262,6 +389,33 @@
                 this.addtilemeta = node.meta;
                 this.addtilecolor = this.rgbToHex(node.color);
                 this.addtilefile = undefined;
+              "
+            ></q-btn>
+            <q-btn
+              style="
+                position: absolute;
+                right: 0;
+                top: 10%;
+                min-width: 0px;
+                min-height: 0px;
+                padding: 0;
+                margin: 0;
+                width: 16px;
+                height: 16px;
+                color: black;
+                background-color: white;
+              "
+              icon="delete"
+              size="xs"
+              title="Delete tile..."
+              dense
+              @click="
+                this.nodeArray = this.nodeArray.filter(
+                  (n) => n.key !== node.key
+                );
+
+                this.rebuildTileset(node.key);
+                this.buildMetaTree();
               "
             ></q-btn>
           </template>
@@ -371,7 +525,12 @@
                       ref="addtilefilefield"
                       v-model="addtilefile"
                       label="Standard"
-                      :rules="[(val) => !!val || 'Field is required']"
+                      :rules="[
+                        (val) =>
+                          !!val ||
+                          this.addtileop === 'edit' ||
+                          'Field is required',
+                      ]"
                       @update:model-value="readTileImage()"
                   /></q-item-section>
                 </q-item>
@@ -1125,7 +1284,7 @@
             this.my >= 0 &&
             this.my < this.height
               ? this.grid?.nameIndex?.[
-                  this.grid?.chosen._data?.[this.mx]?.[this.my]
+                  this.grid?.chosen?._data?.[this.mx]?.[this.my]
                 ]
               : "n/a"
           }}
@@ -1137,7 +1296,7 @@
             this.mx < this.width &&
             this.my >= 0 &&
             this.my < this.height
-              ? this.grid?.entropy._data?.[this.mx]?.[this.my]
+              ? this.grid?.entropy?._data?.[this.mx]?.[this.my]
               : "n/a"
           }}
         </q-badge>
@@ -1182,6 +1341,7 @@ import {
   squeeze,
   reviver,
   ones,
+  map,
   setCartesian,
   range,
   sum,
@@ -1308,6 +1468,7 @@ export default defineComponent({
       startingTile: -1,
       edgeOverrides: {},
       refresh: 0,
+      copyBuffer: { matrix: undefined, ghost: undefined },
     };
   },
   computed: {
@@ -1334,7 +1495,7 @@ export default defineComponent({
       });
     },
     layerName() {
-      return "Layer: " + this.nodeArray?.[parseInt(this.activeLayer)]?.name; //this.nodesInput;
+      return "Layer: " + this.activeLayer; //this.nodesInput;
     },
     addtilebuttonname() {
       return this.addtileop === "add" ? "Add Tile" : "Edit Tile";
@@ -1352,6 +1513,9 @@ export default defineComponent({
   },
 
   methods: {
+    mathjsClone(mjsobj) {
+      return clone(mjsobj);
+    },
     rgbToHex(c) {
       const cc = c.split(",").map((x) => parseInt(x));
       return `#${rgbHex(...cc)}`;
@@ -1661,14 +1825,15 @@ export default defineComponent({
 
         if (!("image" in node)) {
           tile.img = new Image();
+          // if (i > 0) {
           tile.img.src = new URL(
             `../assets/data/${json.name}/${n}.png`,
             import.meta.url
           ).href;
-
           tile.img.onload = () => {
             this.tileDim = tile.img.width;
           };
+          // }
         } else {
           tile.img = node.image;
           delete node.image;
@@ -1767,12 +1932,12 @@ export default defineComponent({
         // };
 
         const node = nodes[name];
-        // console.log("ADJACENCIES FOR:", name);
+        console.log("ADJACENCIES FOR:", name);
         for (const dir in node.adjacencies) {
-          // console.log("  DIR:", dir);
+          console.log("  DIR:", dir);
 
           for (const adj of node.adjacencies[dir]) {
-            // console.log("     - ", adj);
+            console.log("     - ", adj);
 
             const pair = adj.split(">-<");
             const index1 = invertedIndex[pair[0]];
@@ -1943,7 +2108,14 @@ export default defineComponent({
 
           // If this key is new, make a list, otherwise append it to the cluster
           if (!(cascadeKey in clustering)) {
-            console.log("ADDING CASC", clone(adj), "WITH PATH", path);
+            console.log(
+              "ADDING CASC",
+              clone(adj),
+              "WITH PATH",
+              path,
+              "FOR",
+              leaf
+            );
             clustering[cascadeKey] = { cascade: clone(adj), paths: [] };
           }
           clustering[cascadeKey].paths.push(path);
@@ -2623,6 +2795,7 @@ export default defineComponent({
       this.initWorker();
       nextTick(() => {
         this.$refs.inputTree.expandAll();
+        this.setActiveLayer("root");
       });
       // console.log("tiles", this.tiles);
     },
@@ -2637,7 +2810,7 @@ export default defineComponent({
         : min(1, this.inputHeight / this.inputWidth);
     },
     setActiveLayer(layerId) {
-      this.activeLayer = String(layerId);
+      this.activeLayer = layerId;
     },
     generateMetatileImage(color, dim) {
       var canvas = document.createElement("canvas");
@@ -2656,13 +2829,16 @@ export default defineComponent({
       tile.name = name;
       const c = hexRgb(color, { format: "array" });
       c.pop();
-      const imgUrl = meta ? this.generateMetatileImage(c, this.tileDim) : image;
+      let imgUrl = meta ? this.generateMetatileImage(c, this.tileDim) : image;
+      if (!image) {
+        imgUrl = tile.img.src;
+      }
 
       if (meta) {
         node.color = String(c);
         tile.color = node.color;
         if (!node.meta && meta) {
-          this.addNewLayer(String(id));
+          this.addNewLayer(name);
         }
       } else {
         node.icon = imgUrl;
@@ -2712,7 +2888,7 @@ export default defineComponent({
       this.nodeArray.push(node);
 
       if (meta) {
-        this.addNewLayer(String(nodeKey));
+        this.addNewLayer(String(name));
       }
     },
     addNewLayer(id) {
@@ -2841,15 +3017,12 @@ export default defineComponent({
       reader.addEventListener(
         "load",
         (file) => {
+          console.log(file);
           const img = new Image();
           img.src = file.target.result;
           img.onload = () => {
-            // We need to do some magic here...
-            this.print(this.tilesetatlasimage);
             const h = floor(img.width / this.tilesetatlassize);
             const v = floor(img.height / this.tilesetatlassize);
-            this.print(h);
-            this.print(v);
 
             const dataUrls = [];
             for (let i = 0; i < h; i++) {
@@ -2878,7 +3051,7 @@ export default defineComponent({
             let index = this.nodesInput.length;
             for (const image of Array.from(uniqueTiles)) {
               this.addNewTile(
-                String(index),
+                `${this.tilesetatlasfile.name.split(".")[0]}_${String(index)}`,
                 this.addtilecolor, // Unused for leaves anyway
                 image,
                 false
@@ -2886,6 +3059,11 @@ export default defineComponent({
               index++;
             }
           };
+          this.tileDim = this.tilesetatlassize;
+          this.tiles[0].img.src = this.generateMetatileImage(
+            "0,0,0",
+            this.tileDim
+          );
         },
         false
       );
@@ -2924,11 +3102,59 @@ export default defineComponent({
         tiles: toRaw(this.tiles),
         nodeArray: toRaw(this.nodeArray),
         metaLayers: toRaw(this.metaLayers),
+        tileDim: this.tileDim,
       };
       download(JSON.stringify(obj), "tileset.json", "text/plain");
     },
     getTilesetFile() {
       this.$refs.tilesetImport.$el.click();
+    },
+    // TODO: Kinda useless, we just need to re-key the whole thing, is annoying...
+    // Rename to --> remove tile
+    rebuildTileset(tileId) {
+      const nodeArr = toRaw(this.nodeArray);
+      this.nodeArray = [];
+      this.tiles = [];
+      const keyMap = {};
+      let i = 0;
+
+      for (const node of nodeArr) {
+        const nodeClone = structuredClone(toRaw(node));
+        keyMap[nodeClone.key] = i;
+        nodeClone.key = i;
+        this.nodeArray.push(nodeClone);
+        const tile = {
+          slot: node.name,
+          color: node.color,
+          value: i,
+          meta: node.meta,
+        };
+        tile.img = new Image();
+        tile.img.width = this.tileDim;
+        tile.img.height = this.tileDim;
+        tile.img.src = node.icon.split("img:")[1];
+
+        this.tiles.push(tile);
+        i++;
+      }
+
+      // Requires us to go through all meta layers and shift the indices... ugh
+      for (const c in this.metaLayers) {
+        const layer = this.metaLayers[c];
+        layer.matrix = map(layer.matrix, (value) => {
+          return keyMap[value] ?? -1;
+        });
+        this.refreshLayerCanvas(layer);
+      }
+    },
+    refreshLayerCanvas(layer) {
+      const context = this.$refs[`layer-${layer.id}`][0]?.getContext("2d"); // Needs to be updated as well
+      this.updateInputCanvas(
+        setCartesian(range(0, this.inputWidth), range(0, this.inputHeight))
+          ._data,
+        layer,
+        context
+      );
     },
     importTileset() {
       const reader = new FileReader();
@@ -2945,33 +3171,22 @@ export default defineComponent({
           this.nodeArray = obj.nodeArray;
           this.metaLayers = obj.metaLayers;
           for (const t of this.tiles) {
-
-
-
             const imageSource = this.nodeArray[t.value].icon.substring(4);
             t.img = new Image();
             t.img.src = imageSource;
-            if (t === 0) {
-              t.img.src = generateMetatileImage('0,0,0', this.tileDim);
-            }
-
           }
 
           nextTick(() => {
             for (const layer of this.layers) {
-              const context =
-                this.$refs[`layer-${layer.id}`][0]?.getContext("2d");
-              this.updateInputCanvas(
-                setCartesian(
-                  range(0, this.inputWidth),
-                  range(0, this.inputHeight)
-                )._data,
-                layer,
-                context
-              );
+              this.refreshLayerCanvas(layer);
             }
           });
+          this.tileDim = obj.tileDim ?? 8;
 
+          this.tiles[0].img.src = this.generateMetatileImage(
+            "0,0,0",
+            this.tileDim
+          );
 
           this.buildMetaTree();
         },
@@ -2998,6 +3213,7 @@ export default defineComponent({
       const nodes = {};
       const index = {};
       const invertedIndex = {};
+      console.log(this.tiles, this.nodeArray);
       treeNodes.forEach((n) => {
         index[n.key] = n.name;
         invertedIndex[n.name] = n.key;
@@ -3023,7 +3239,7 @@ export default defineComponent({
             // Assign children, probabilities and adjacencies
             // let prevNode = nodes[index[0]];
 
-            const metaName = index[l.id];
+            const metaName = l.id;
             const tileId = l.matrix._data[i][j];
             const ghost = l.ghost._data[i][j];
 
@@ -3078,12 +3294,14 @@ export default defineComponent({
           const metaName = uniqueTiles[tileName];
           const meta = nodes[metaName];
           // Indicates that we only have a mix of ghosts and non-ghosts
+          // console.log("wot??", l, tileName, meta.children[tileName]);
           if (meta.children[tileName] > 1) {
             console.log(
               "Deleting ",
               metaName,
               "from ghost parents of",
-              tileName
+              tileName,
+              "because not all its tiles are ghosts"
             );
             delete tile.ghostparents[metaName];
           }
@@ -3312,6 +3530,7 @@ export default defineComponent({
           this.metaLayers[this.activeLayer].matrix._data[this.mx][this.my];
 
         this.inputPaint();
+
         // PAINT INPUT
       }
     });
@@ -3334,6 +3553,15 @@ export default defineComponent({
         } else if (this.tab === "input") {
           this.pruneMetaTiles();
           this.buildMetaTree();
+        }
+      } else if (e.button == 1 && this.tab === "input") {
+        // Do something here
+        var layer = this.metaLayers[this.activeLayer];
+        const tileId = layer?.matrix._data?.[this.mx]?.[this.my];
+        if (tileId > 0) {
+          this.selectedNodeInput = `${
+            this.workerData.invertedIndex[layer.id]
+          }|${tileId}`;
         }
       }
     });
@@ -3459,7 +3687,7 @@ export default defineComponent({
       );
     }
     this.setStepSize();
-    this.addNewLayer("0");
+    this.addNewLayer("root");
   },
 });
 </script>
