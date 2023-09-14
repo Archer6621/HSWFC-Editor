@@ -1883,7 +1883,8 @@ export default defineComponent({
               // This is where we do something useful
 
               // Iterate through path:
-              for (let i = path.length - 2; i > 1; i--) {
+
+              for (let i = path.length - 2; i >= 0; i--) {
                 // const currentInputNodeName = path[i].name;
                 // const currenInputNode = nodes[currenInputNodeName];
                 const inputAncestorName = path[i].name;
