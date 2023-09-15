@@ -66,7 +66,7 @@
                 /></q-item-section>
               </q-item>
               <q-item>
-                <q-item-section>Tile Image</q-item-section>
+                <q-item-section>Tile Size (pixels)</q-item-section>
                 <q-item-section>
                   <q-input
                     :rules="[(val) => !!val || 'Field is required']"
@@ -413,7 +413,7 @@
                 this.nodeArray = this.nodeArray.filter(
                   (n) => n.key !== node.key
                 );
-
+                delete this.metaLayers[node.name];
                 this.rebuildTileset(node.key);
                 this.buildMetaTree();
               "
@@ -2795,7 +2795,9 @@ export default defineComponent({
       this.initWorker();
       nextTick(() => {
         this.$refs.inputTree.expandAll();
-        this.setActiveLayer("root");
+        if (!(this.activeLayer in this.metaLayers)) {
+          this.setActiveLayer("root");
+        }
       });
       // console.log("tiles", this.tiles);
     },
@@ -3145,6 +3147,13 @@ export default defineComponent({
           return keyMap[value] ?? -1;
         });
         this.refreshLayerCanvas(layer);
+      }
+
+      // Also do this for the copy buffer
+      if (this.copyBuffer.matrix) {
+        this.copyBuffer.matrix = map(toRaw(this.copyBuffer.matrix), (value) => {
+          return keyMap[value] ?? -1;
+        });
       }
     },
     refreshLayerCanvas(layer) {
