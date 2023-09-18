@@ -2033,6 +2033,7 @@ export default defineComponent({
       // Lazy way to do it the lazy way: use a dict, and use the stringified chain of IDs as keys, and arrays of nodes as the values
 
       // Non-recursive depth-first-based algorithm to get all the possible paths
+      // TODO: This algorithm seems to be rather slow
       const stack = [root];
       let path = [];
       const branching_points = [];
@@ -3337,6 +3338,9 @@ export default defineComponent({
           },
         };
       });
+      console.log("LAYERS", this.layers);
+      console.log("NODES", nodes);
+
       for (const l of this.layers) {
         const uniqueTiles = {};
         for (let i = 0; i < this.inputWidth; i++) {
