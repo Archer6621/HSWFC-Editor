@@ -3068,16 +3068,25 @@ export default defineComponent({
             }
           };
           this.tileDim = this.tilesetatlassize;
-          this.tiles[0].img.src = this.generateMetatileImage(
-            "0,0,0",
-            this.tileDim
-          );
+          console.log(this.tileDim);
+          this.regenerateMetatiles();
         },
         false
       );
 
       if (this.tilesetatlasfile) {
         reader.readAsDataURL(this.tilesetatlasfile);
+      }
+    },
+    regenerateMetatiles() {
+      for (let i = 0; i < this.nodeArray.length; i++) {
+        const node = this.nodeArray[i];
+        const tile = this.tiles[i];
+        if (node.meta) {
+          const img = this.generateMetatileImage(node.color, this.tileDim);
+          tile.img.src = img;
+          node.icon = `img:${img}`;
+        }
       }
     },
     // This is to check which tiles are allocated/unallocated --> needs to change
@@ -3198,10 +3207,7 @@ export default defineComponent({
           });
           this.tileDim = obj.tileDim ?? 8;
 
-          this.tiles[0].img.src = this.generateMetatileImage(
-            "0,0,0",
-            this.tileDim
-          );
+          this.regenerateMetatiles();
 
           this.buildMetaTree();
         },
