@@ -102,6 +102,15 @@
           style="flex-grow: 1; min-width: 0"
         ></q-btn>
       </span>
+      <span class="q-pa-sm" style="display: flex; flex-grow: 1; min-width: 0">
+        <q-btn
+          icon="build"
+          @click="buildMetaTreePrep()"
+          title="Rebuild DAG"
+          style="flex-grow: 1; min-width: 0"
+        >
+        </q-btn>
+      </span>
       <q-space></q-space>
       <q-space></q-space>
       <q-space></q-space>
@@ -330,6 +339,9 @@
 
               <q-item-section avatar dense> </q-item-section>
             </q-item>
+            <q-inner-loading :transition-duration="0" :showing="rebuilding">
+              <q-spinner-gears size="50px" color="primary" />
+            </q-inner-loading>
           </template>
         </q-tree>
       </div>
@@ -343,6 +355,7 @@
           Available Tiles</b
         >
       </div>
+
       <q-separator style="height: 1px; width: 100%" vertical inset />
       <div
         class="q-pa-md q-gutter-sm"
@@ -651,6 +664,19 @@
               @update:model-value="resetFocus"
             />
           </q-item-section>
+        </q-item>
+
+        <q-item dense>
+          <q-checkbox
+            title="Whether to automatically rebuild the DAG when releasing the mouse. Can be slow for complicated tilesets."
+            size="md"
+            v-model="autobuild"
+            val="md"
+            dense
+            label="Rebuild DAG Automatically"
+            class="row"
+            @click="resetFocus"
+          />
         </q-item>
       </div>
     </div>
@@ -1325,6 +1351,8 @@
 </template>
 
 <script>
+import { Loading } from "quasar";
+
 import { defineComponent, ref, toRaw, nextTick } from "vue";
 import {
   flatten,
@@ -1469,6 +1497,8 @@ export default defineComponent({
       edgeOverrides: {},
       refresh: 0,
       copyBuffer: { matrix: undefined, ghost: undefined },
+      autobuild: true,
+      rebuilding: false,
     };
   },
   computed: {
@@ -2790,7 +2820,7 @@ export default defineComponent({
       //     }
       //   }
       // }
-
+      this.rebuilding = false;
       // Build adjacency hashmap
       this.initWorker();
       nextTick(() => {
@@ -3219,6 +3249,12 @@ export default defineComponent({
         reader.readAsText(this.uploadedtilesetfile[0]);
       }
     },
+    buildMetaTreePrep() {
+      this.rebuilding = true;
+      setTimeout(() => {
+        this.buildMetaTree();
+      }, 100);
+    },
     buildMetaTree() {
       console.log("LAYERS", toRaw(this.metaLayers), toRaw(this.layers));
       // STEPS
@@ -3572,8 +3608,9 @@ export default defineComponent({
           this.contradictionBuffer = []; // TODO: Bit of a cop-out, should only clear the parts that were painted over
           this.paintMat = zeros(this.width, this.height);
         } else if (this.tab === "input") {
-          this.pruneMetaTiles();
-          this.buildMetaTree();
+          if (this.autobuild) {
+            this.buildMetaTreePrep();
+          }
         }
       } else if (e.button == 1 && this.tab === "input") {
         // Do something here
