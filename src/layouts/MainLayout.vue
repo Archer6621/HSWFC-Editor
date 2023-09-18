@@ -3605,36 +3605,38 @@ export default defineComponent({
       this.ctrlDown = e.ctrlKey;
     });
     window.addEventListener("keypress", (e) => {
-      if (e.key === " ") {
-        this.autoCollapse = !this.autoCollapse;
-        if (this.autoCollapse) {
-          this.checkpoint();
-          this.worker.postMessage({ question: "auto" });
+      if (this.tab === "environment") {
+        if (e.key === " ") {
+          this.autoCollapse = !this.autoCollapse;
+          if (this.autoCollapse) {
+            this.checkpoint();
+            this.worker.postMessage({ question: "auto" });
+          }
         }
-      }
-      if (e.key === "Escape") {
-        this.leftDrawerOpen = !this.leftDrawerOpen;
-      }
-      // CTRL + Z is special...
-      if (this.ctrlDown && e.key.charCodeAt(0) == 26) {
-        this.undo();
-      }
+        if (e.key === "Escape") {
+          this.leftDrawerOpen = !this.leftDrawerOpen;
+        }
+        // CTRL + Z is special...
+        if (this.ctrlDown && e.key.charCodeAt(0) == 26) {
+          this.undo();
+        }
 
-      // So is CTRL + Y...
-      if (this.ctrlDown && e.key.charCodeAt(0) == 25) {
-        this.redo();
-      }
+        // So is CTRL + Y...
+        if (this.ctrlDown && e.key.charCodeAt(0) == 25) {
+          this.redo();
+        }
 
-      if (e.key === "r") {
-        this.reset();
-      }
-      if (e.key === "s") {
-        this.oneStep();
-      }
+        if (e.key === "r") {
+          this.reset();
+        }
+        if (e.key === "s") {
+          this.oneStep();
+        }
 
-      for (const i of range(1, this.snapshotCount + 1)) {
-        if (e.key === `${i.value}`) {
-          this.setSnapshot(i.value - 1);
+        for (const i of range(1, this.snapshotCount + 1)) {
+          if (e.key === `${i.value}`) {
+            this.setSnapshot(i.value - 1);
+          }
         }
       }
     });
