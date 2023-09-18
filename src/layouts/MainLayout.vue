@@ -2826,6 +2826,7 @@ export default defineComponent({
     editTile(id, name, color, image, meta) {
       const node = this.nodeArray[id];
       const tile = this.tiles[id];
+      const oldName = node.name;
 
       node.name = name;
       tile.name = name;
@@ -2839,8 +2840,13 @@ export default defineComponent({
       if (meta) {
         node.color = String(c);
         tile.color = node.color;
-        if (!node.meta && meta) {
+
+        const layer = this.metaLayers[oldName];
+        delete this.metaLayers[oldName];
+        if (layer === undefined) {
           this.addNewLayer(name);
+        } else {
+          this.metaLayers[name] = layer;
         }
       } else {
         node.icon = imgUrl;
