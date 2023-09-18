@@ -2934,15 +2934,15 @@ export default defineComponent({
               tileId = -1;
               layer.ghost._data[i][j] = false;
             }
-
-            if (this.activeLayer === String(tileId)) {
+            console.log(tileId);
+            if (this.activeLayer === this.nodeArray[tileId]?.name) {
               continue;
             }
 
             // TODO: Check for cycle
-            if (this.isAncestor(tileId, parseInt(this.activeLayer))) {
-              continue;
-            }
+            // if (this.isAncestor(tileId, parseInt(this.activeLayer))) {
+            //   continue;
+            // }
 
             if (this.startingTile === tileId) {
               layer.ghost._data[i][j] = !this.startingGhost;
