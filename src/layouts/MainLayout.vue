@@ -3580,9 +3580,7 @@ export default defineComponent({
         var layer = this.metaLayers[this.activeLayer];
         const tileId = layer?.matrix._data?.[this.mx]?.[this.my];
         if (tileId > 0) {
-          this.selectedNodeInput = `${
-            this.workerData.invertedIndex[layer.id]
-          }|${tileId}`;
+          this.selectedNodeInput = `|${tileId}`;
         }
       }
     });
