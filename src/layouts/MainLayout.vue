@@ -1980,6 +1980,54 @@ export default defineComponent({
       }
       console.log("META ADJ:", adjmeta);
 
+      // Deal with meta-leaf (wildcard) adjacencies
+      for (const name in nodes) {
+        const adjacencies = adjmeta[name];
+        for (const dir in adjacencies) {
+          for (const n1 in nodes) {
+            for (const n2 in nodes) {
+              const node1 = nodes[n1];
+              const node2 = nodes[n2];
+              const idx1 = invertedIndex[n1];
+              const idx2 = invertedIndex[n2];
+
+              if (adjacencies[dir].get([idx1, idx2])) {
+                if (
+                  (node1.meta && !node2.meta) ||
+                  (!node1.meta && node2.meta)
+                ) {
+                  const meta = node1.meta ? node1 : node2;
+                  const metaidx = node1.meta ? idx1 : idx2;
+                  // Get all the nodes in the subtree
+                  const queue = Object.keys(meta.children).filter(
+                    (c) => meta.children[c] > 1
+                  );
+                  const subtree = [];
+                  while (queue.length > 0) {
+                    const cname = queue.pop();
+                    const cnode = nodes[cname];
+                    const children = Object.keys(cnode.children).filter(
+                      (c) => cnode.children[c] > 1
+                    );
+                    queue.push(...children);
+                    subtree.push(cname);
+                  }
+
+                  for (const sub of subtree) {
+                    // Cast the ADJ downwards
+                    if (metaidx === idx1) {
+                      adjacencies[dir].set([invertedIndex[sub], idx2], 1);
+                    } else {
+                      adjacencies[dir].set([idx1, invertedIndex[sub]], 1);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Get all possible paths from root
       // Lazy way to do it: just get all possible paths from the expanded tree, then eliminate paths that consist of the same IDs.
       // Lazy way to do it the lazy way: use a dict, and use the stringified chain of IDs as keys, and arrays of nodes as the values
